@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MySportz Live Widget</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #080b0f;
+    --surface: #0e1318;
+    --border:  #1a2230;
+    --accent:  #e8a020;
+    --live:    #ef4444;
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+  }
+
+  body {
+    background: transparent;
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── WIDGET SHELL ── */
+  #widget {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ── BRAND BADGE ── */
+  #brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+    height: 100%;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 2;
+  }
+
+  #brand-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 6px var(--live);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  #brand-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  #brand-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 7px;
+    color: var(--live);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  /* ── TICKER TRACK ── */
+  #ticker-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    height: 100%;
+    cursor: default;
+  }
+
+  /* fade edges */
+  #ticker-wrap::before,
+  #ticker-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 32px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  #ticker-wrap::before { left: 0;  background: linear-gradient(to right, var(--bg), transparent); }
+  #ticker-wrap::after  { right: 0; background: linear-gradient(to left,  var(--bg), transparent); }
+
+  #ticker-track {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    gap: 0;
+    animation: scroll linear infinite;
+    white-space: nowrap;
+    will-change: transform;
+  }
+
+  #ticker-track:hover { animation-play-state: paused; }
+
+  @keyframes scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* ── GAME CHIP ── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 18px 0 12px;
+    height: 48px;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .chip:hover { background: #0e1318; }
+
+  .chip-badge {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    object-fit: contain;
+    background: #1e2a38;
+    flex-shrink: 0;
+  }
+
+  .chip-badge-placeholder {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+
+  .chip-matchup {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .chip-teams {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.2px;
+  }
+
+  .chip-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .chip-cat {
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .chip-live-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--live);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  .chip-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── LOADING / ERROR ── */
+  #status {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    gap: 8px;
+  }
+
+  .mini-spinner {
+    width: 12px; height: 12px;
+    border: 1.5px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── WATERMARK ── */
+  #watermark {
+    padding: 0 12px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  #watermark a {
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: color 0.15s;
+  }
+
+  #watermark a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div id="widget">
+  <div id="brand">
+    <div>
+      <div id="brand-name">MySportz</div>
+      <div id="brand-sub">Live</div>
+    </div>
+    <div id="brand-dot"></div>
+  </div>
+
+  <div id="ticker-wrap">
+    <div id="status">
+      <div class="mini-spinner"></div>
+      Loading live games…
+    </div>
+    <div id="ticker-track" style="display:none;"></div>
+  </div>
+
+  <div id="watermark">
+    <a href="https://watchsportz.pages.dev" target="_blank">watchsportz.pages.dev</a>
+  </div>
+</div>
+
+<script>
+  const HOST        = 'https://streamed.st';
+  const API         = HOST + '/api';
+  const ESPN        = 'https://a.espncdn.com/i/teamlogos';
+  const BLOCKED     = new Set(['darts','cricket','football','billiards','rugby','afl']);
+  const SPORT_EMOJI = {
+    basketball: '🏀', baseball: '⚾', hockey: '🏒',
+    'american-football': '🏈', tennis: '🎾', golf: '⛳',
+    'motor-sports': '🏎️', boxing: '🥊', mma: '🥋',
+    other: '🏅'
+  };
+
+  const TEAM_LOGOS = {
+    // NBA
+    'hawks':`${ESPN}/nba/500/atl.png`,'celtics':`${ESPN}/nba/500/bos.png`,
+    'nets':`${ESPN}/nba/500/bkn.png`,'hornets':`${ESPN}/nba/500/cha.png`,
+    'bulls':`${ESPN}/nba/500/chi.png`,'cavaliers':`${ESPN}/nba/500/cle.png`,
+    'cavs':`${ESPN}/nba/500/cle.png`,'mavericks':`${ESPN}/nba/500/dal.png`,
+    'mavs':`${ESPN}/nba/500/dal.png`,'nuggets':`${ESPN}/nba/500/den.png`,
+    'pistons':`${ESPN}/nba/500/det.png`,'warriors':`${ESPN}/nba/500/gs.png`,
+    'rockets':`${ESPN}/nba/500/hou.png`,'pacers':`${ESPN}/nba/500/ind.png`,
+    'clippers':`${ESPN}/nba/500/lac.png`,'lakers':`${ESPN}/nba/500/lal.png`,
+    'grizzlies':`${ESPN}/nba/500/mem.png`,'heat':`${ESPN}/nba/500/mia.png`,
+    'bucks':`${ESPN}/nba/500/mil.png`,'timberwolves':`${ESPN}/nba/500/min.png`,
+    'pelicans':`${ESPN}/nba/500/no.png`,'knicks':`${ESPN}/nba/500/ny.png`,
+    'thunder':`${ESPN}/nba/500/okc.png`,'magic':`${ESPN}/nba/500/orl.png`,
+    '76ers':`${ESPN}/nba/500/phi.png`,'sixers':`${ESPN}/nba/500/phi.png`,
+    'suns':`${ESPN}/nba/500/phx.png`,'blazers':`${ESPN}/nba/500/por.png`,
+    'kings':`${ESPN}/nba/500/sac.png`,'spurs':`${ESPN}/nba/500/sa.png`,
+    'raptors':`${ESPN}/nba/500/tor.png`,'jazz':`${ESPN}/nba/500/utah.png`,
+    'wizards':`${ESPN}/nba/500/wsh.png`,
+    // MLB
+    'diamondbacks':`${ESPN}/mlb/500/ari.png`,'braves':`${ESPN}/mlb/500/atl.png`,
+    'orioles':`${ESPN}/mlb/500/bal.png`,'red sox':`${ESPN}/mlb/500/bos.png`,
+    'cubs':`${ESPN}/mlb/500/chc.png`,'white sox':`${ESPN}/mlb/500/chw.png`,
+    'reds':`${ESPN}/mlb/500/cin.png`,'guardians':`${ESPN}/mlb/500/cle.png`,
+    'rockies':`${ESPN}/mlb/500/col.png`,'tigers':`${ESPN}/mlb/500/det.png`,
+    'astros':`${ESPN}/mlb/500/hou.png`,'royals':`${ESPN}/mlb/500/kc.png`,
+    'angels':`${ESPN}/mlb/500/laa.png`,'dodgers':`${ESPN}/mlb/500/lad.png`,
+    'marlins':`${ESPN}/mlb/500/mia.png`,'brewers':`${ESPN}/mlb/500/mil.png`,
+    'twins':`${ESPN}/mlb/500/min.png`,'mets':`${ESPN}/mlb/500/nym.png`,
+    'yankees':`${ESPN}/mlb/500/nyy.png`,'athletics':`${ESPN}/mlb/500/oak.png`,
+    'phillies':`${ESPN}/mlb/500/phi.png`,'pirates':`${ESPN}/mlb/500/pit.png`,
+    'padres':`${ESPN}/mlb/500/sd.png`,'mariners':`${ESPN}/mlb/500/sea.png`,
+    'giants':`${ESPN}/mlb/500/sf.png`,'cardinals':`${ESPN}/mlb/500/stl.png`,
+    'rays':`${ESPN}/mlb/500/tb.png`,'rangers':`${ESPN}/mlb/500/tex.png`,
+    'blue jays':`${ESPN}/mlb/500/tor.png`,'nationals':`${ESPN}/mlb/500/wsh.png`,
+    // NFL
+    'falcons':`${ESPN}/nfl/500/atl.png`,'ravens':`${ESPN}/nfl/500/bal.png`,
+    'bills':`${ESPN}/nfl/500/buf.png`,'panthers':`${ESPN}/nfl/500/car.png`,
+    'bears':`${ESPN}/nfl/500/chi.png`,'bengals':`${ESPN}/nfl/500/cin.png`,
+    'browns':`${ESPN}/nfl/500/cle.png`,'cowboys':`${ESPN}/nfl/500/dal.png`,
+    'broncos':`${ESPN}/nfl/500/den.png`,'lions':`${ESPN}/nfl/500/det.png`,
+    'packers':`${ESPN}/nfl/500/gb.png`,'texans':`${ESPN}/nfl/500/hou.png`,
+    'colts':`${ESPN}/nfl/500/ind.png`,'jaguars':`${ESPN}/nfl/500/jax.png`,
+    'chiefs':`${ESPN}/nfl/500/kc.png`,'raiders':`${ESPN}/nfl/500/lv.png`,
+    'chargers':`${ESPN}/nfl/500/lac.png`,'rams':`${ESPN}/nfl/500/lar.png`,
+    'dolphins':`${ESPN}/nfl/500/mia.png`,'vikings':`${ESPN}/nfl/500/min.png`,
+    'patriots':`${ESPN}/nfl/500/ne.png`,'saints':`${ESPN}/nfl/500/no.png`,
+    'jets':`${ESPN}/nfl/500/nyj.png`,'eagles':`${ESPN}/nfl/500/phi.png`,
+    'steelers':`${ESPN}/nfl/500/pit.png`,'49ers':`${ESPN}/nfl/500/sf.png`,
+    'seahawks':`${ESPN}/nfl/500/sea.png`,'buccaneers':`${ESPN}/nfl/500/tb.png`,
+    'titans':`${ESPN}/nfl/500/ten.png`,'commanders':`${ESPN}/nfl/500/wsh.png`,
+    // NHL
+    'bruins':`${ESPN}/nhl/500/bos.png`,'sabres':`${ESPN}/nhl/500/buf.png`,
+    'flames':`${ESPN}/nhl/500/cgy.png`,'hurricanes':`${ESPN}/nhl/500/car.png`,
+    'blackhawks':`${ESPN}/nhl/500/chi.png`,'avalanche':`${ESPN}/nhl/500/col.png`,
+    'blue jackets':`${ESPN}/nhl/500/cbj.png`,'stars':`${ESPN}/nhl/500/dal.png`,
+    'red wings':`${ESPN}/nhl/500/det.png`,'oilers':`${ESPN}/nhl/500/edm.png`,
+    'wild':`${ESPN}/nhl/500/min.png`,'canadiens':`${ESPN}/nhl/500/mtl.png`,
+    'predators':`${ESPN}/nhl/500/nsh.png`,'devils':`${ESPN}/nhl/500/nj.png`,
+    'islanders':`${ESPN}/nhl/500/nyi.png`,'senators':`${ESPN}/nhl/500/ott.png`,
+    'flyers':`${ESPN}/nhl/500/phi.png`,'penguins':`${ESPN}/nhl/500/pit.png`,
+    'sharks':`${ESPN}/nhl/500/sj.png`,'kraken':`${ESPN}/nhl/500/sea.png`,
+    'blues':`${ESPN}/nhl/500/stl.png`,'lightning':`${ESPN}/nhl/500/tb.png`,
+    'maple leafs':`${ESPN}/nhl/500/tor.png`,'canucks':`${ESPN}/nhl/500/van.png`,
+    'golden knights':`${ESPN}/nhl/500/vgk.png`,'capitals':`${ESPN}/nhl/500/wsh.png`,
+  };
+
+  function getLogo(name) {
+    if (!name) return null;
+    const n = name.toLowerCase();
+    for (const [kw, url] of Object.entries(TEAM_LOGOS)) {
+      if (n.includes(kw)) return url;
+    }
+    return null;
+  }
+
+  function badgeUrl(src) {
+    if (!src) return null;
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.startsWith('/'))       return HOST + src;
+    return `${HOST}/api/images/badge/${src}.webp`;
+  }
+
+  function badgeEl(name, src) {
+    const logo = getLogo(name) || badgeUrl(src);
+    if (logo) {
+      const img = document.createElement('img');
+      img.className = 'chip-badge';
+      img.src       = logo;
+      img.alt       = name || '';
+      img.loading   = 'lazy';
+      img.onerror   = () => { img.outerHTML = `<div class="chip-badge-placeholder">${(name||'?')[0]}</div>`; };
+      return img.outerHTML;
+    }
+    return `<div class="chip-badge-placeholder">${(name||'?')[0]}</div>`;
+  }
+
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function buildChip(match) {
+    const home    = match.teams?.home;
+    const away    = match.teams?.away;
+    const cat     = (match.category || 'other').toLowerCase();
+    const emoji   = SPORT_EMOJI[cat] || SPORT_EMOJI.other;
+    const isNow   = Date.now() >= match.date && Date.now() <= match.date + 3.5 * 3600000;
+
+    const homeLabel = home?.name || match.title;
+    const awayLabel = away?.name || '';
+    const matchup   = awayLabel ? `${homeLabel} vs ${awayLabel}` : homeLabel;
+
+    const homeBadge = home ? badgeEl(home.name, home.badge) : `<span style="font-size:14px">${emoji}</span>`;
+    const awayBadge = away ? badgeEl(away.name, away.badge) : '';
+
+    return `
+      <div class="chip">
+        ${homeBadge}
+        ${awayBadge ? awayBadge : ''}
+        <div class="chip-matchup">
+          <div class="chip-teams">${matchup}</div>
+          <div class="chip-meta">
+            <span class="chip-cat">${cat}</span>
+            ${isNow ? '<div class="chip-live-dot"></div>' : ''}
+            <span class="chip-time">${fmtTime(match.date)}</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function load() {
+    try {
+      const res  = await fetch(`${API}/matches/live`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const all  = await res.json();
+      const data = all.filter(m => !BLOCKED.has((m.category||'').toLowerCase()));
+
+      if (!data.length) {
+        document.getElementById('status').innerHTML = 'No live games right now';
+        return;
+      }
+
+      // Sort popular first
+      data.sort((a, b) => (b.popular - a.popular) || (a.date - b.date));
+
+      const chipsHTML = data.map(buildChip).join('');
+
+      const track = document.getElementById('ticker-track');
+      // Duplicate for seamless infinite scroll
+      track.innerHTML = chipsHTML + chipsHTML;
+      track.style.display = 'flex';
+      document.getElementById('status').style.display = 'none';
+
+      // Set scroll speed based on content width
+      const totalWidth = track.scrollWidth / 2;
+      const speed      = totalWidth / 60; // px per second — ~60s to cross full width
+      track.style.animationDuration = `${speed}s`;
+
+    } catch(e) {
+      document.getElementById('status').innerHTML = '⚠ Could not load games';
+    }
+  }
+
+  load();
+  // Refresh every 3 minutes
+  setInterval(load, 3 * 60 * 1000);
+</script>
+</body>
+</html>

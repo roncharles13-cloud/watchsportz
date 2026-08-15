@@ -1,0 +1,18 @@
+{
+  "name": "watchsportz-proxy",
+  "version": "1.0.0",
+  "description": "Local proxy server for WatchSportZ — strips ads, blocks popups, injects player control bridge",
+  "main": "proxy-server.js",
+  "scripts": {
+    "start": "node proxy-server.js",
+    "dev":   "node proxy-server.js"
+  },
+  "dependencies": {
+    "express":    "^4.18.2",
+    "node-fetch": "^2.7.0",
+    "cors":       "^2.8.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
