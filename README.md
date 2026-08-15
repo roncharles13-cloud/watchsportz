@@ -63,15 +63,22 @@ experience immediately. It's a Cloudflare Pages Function + KV, already written a
 3. No build command, no output dir — it's static (+ Pages Functions auto-detected from `functions/`).
 4. Verify `watchsportz.pages.dev/stream.html` loads live matches and a match plays.
 
-## Deploy (GitHub Pages) — free static hosting
-The site is GitHub-Pages-ready: all internal links are relative, and it works served from a
-project-page subpath (`https://<user>.github.io/<repo>/`). The included workflow
-(`.github/workflows/pages.yml`) publishes **only** the `project/` folder.
+## Deploy (GitHub Pages) — free static hosting  ✅ LIVE
+Deployed at **https://roncharles13-cloud.github.io/watchsportz/** (repo:
+`roncharles13-cloud/watchsportz`, public). Pages serves the **`gh-pages` branch** (which is
+the `project/` folder at its root — built with `git subtree`), so all internal links are
+relative and resolve under the `/watchsportz/` subpath.
 
-1. Push this repo to GitHub (see steps below).
-2. Repo → **Settings → Pages → Source: GitHub Actions**.
-3. The workflow deploys on every push to `main`; your site is at
-   `https://<user>.github.io/<repo>/` (entry page: `index.html`, app: `stream.html`).
+**Updating the live site after you edit `project/`:**
+```bash
+cd "D:\OneDrive\Desktop\STREAM\STREAM"
+git add -A && git commit -m "update"
+git push origin main
+git branch -D gh-pages 2>NUL & git subtree split --prefix=project -b gh-pages
+git push -f origin gh-pages           # Pages rebuilds in ~1 min
+```
+(Auto-deploy on push is possible with `.github/workflows/pages.yml`, but that needs the
+`gh auth refresh -h github.com -s workflow` scope added once, interactively.)
 
 **Important differences vs Cloudflare Pages:**
 - GitHub Pages is **static only** — there are no Functions, so `/api/feed-health` does not
