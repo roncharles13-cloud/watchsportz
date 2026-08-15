@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MySportz — Analytics</title>
+<meta name="robots" content="noindex, nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#080b0f;--surface:#0e1318;--border:#1a2230;
+    --accent:#e8a020;--live:#ef4444;--text:#e2e8f0;
+    --muted:#64748b;--card:#111820;--hd:#22c55e;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 28px;height:52px;background:var(--surface);
+    border-bottom:1px solid var(--border);
+  }
+  .brand{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);}
+  .brand span{color:var(--text);}
+  .header-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
+
+  .page{max-width:1000px;margin:0 auto;padding:28px 20px;}
+
+  /* KPI row */
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px 18px;}
+  .kpi-val{font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--accent);line-height:1;}
+  .kpi-lbl{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  /* panels */
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:18px;}
+  .panel-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--text);margin-bottom:14px;}
+
+  /* bar chart */
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .bar-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:110px;flex-shrink:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;}
+  .bar-track{flex:1;background:var(--border);border-radius:2px;height:6px;overflow:hidden;}
+  .bar-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 0.4s ease;}
+  .bar-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:28px;text-align:right;flex-shrink:0;}
+
+  /* activity log */
+  .log-item{
+    display:flex;align-items:center;gap:10px;
+    padding:7px 0;border-bottom:1px solid var(--border);
+    font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);
+  }
+  .log-item:last-child{border-bottom:none;}
+  .log-event{color:var(--text);font-size:11px;}
+  .log-time{margin-left:auto;flex-shrink:0;}
+
+  .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .dot-stream{background:var(--accent);}
+  .dot-view{background:var(--hd);}
+  .dot-sport{background:var(--accent2);}
+
+  .empty{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);
+    letter-spacing:1px;text-transform:uppercase;text-align:center;padding:24px;}
+
+  .reset-btn{
+    background:none;border:1px solid #f87171;color:#f87171;
+    font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;
+    text-transform:uppercase;padding:5px 12px;border-radius:4px;cursor:pointer;
+    transition:all 0.15s;
+  }
+  .reset-btn:hover{background:#f87171;color:#000;}
+
+  .full-panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:12px;}
+  .tag{display:inline-block;padding:2px 8px;border-radius:3px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;}
+  .tag-live{background:rgba(239,68,68,0.15);color:var(--live);border:1px solid rgba(239,68,68,0.3);}
+  .tag-note{background:rgba(232,160,32,0.1);color:var(--accent);border:1px solid rgba(232,160,32,0.2);font-size:9px;padding:3px 8px;border-radius:3px;font-family:'DM Mono',monospace;letter-spacing:1px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand">MY<span>SPORTZ</span> — Analytics</div>
+    <div class="header-sub">Internal Dashboard · <span id="last-update">—</span></div>
+  </div>
+  <button class="reset-btn" onclick="resetData()">Reset Data</button>
+</header>
+
+<div class="page">
+
+  <!-- Plausible note -->
+  <div class="full-panel" style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+    <span class="tag tag-note">Pro Tip</span>
+    <span style="font-size:12px;color:var(--muted);">
+      For full traffic analytics (referrers, countries, devices), connect
+      <strong style="color:var(--text)">Plausible.io</strong> — free 30-day trial, then $9/mo.
+      Your domain is already configured in the code.
+    </span>
+    <a href="https://plausible.io" target="_blank" style="margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);text-decoration:none;white-space:nowrap;">plausible.io →</a>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-val" id="kpi-streams">0</div>
+      <div class="kpi-lbl">Streams Watched</div>
+      <div class="kpi-sub" id="kpi-streams-sub">this session</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" id="kpi-views">0</div>
+      <div class="kpi-lbl">Page Views</div>
+      <div class="kpi-sub" id="kpi-views-sub">all time</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" id="kpi-days">0</div>
+      <div class="kpi-lbl">Days Active</div>
+      <div class="kpi-sub" id="kpi-days-sub">since first visit</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" id="kpi-sports">0</div>
+      <div class="kpi-lbl">Sports Watched</div>
+      <div class="kpi-sub">unique categories</div>
+    </div>
+  </div>
+
+  <div class="panels">
+    <!-- Top sports -->
+    <div class="panel">
+      <div class="panel-title">Top Sports</div>
+      <div id="sports-chart"><div class="empty">No data yet</div></div>
+    </div>
+
+    <!-- Top streams -->
+    <div class="panel">
+      <div class="panel-title">Top Streams</div>
+      <div id="streams-chart"><div class="empty">No data yet</div></div>
+    </div>
+  </div>
+
+  <!-- Feed reliability (learned source health) -->
+  <div class="full-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div class="panel-title" style="margin-bottom:0">Feed Reliability — Source Health</div>
+      <span class="tag tag-note">learned</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">
+      Which upstream sources actually deliver a working stream — learned from real playback.
+      Green = reliable, red = mostly dead. The player prefers the green ones automatically.
+    </div>
+    <div id="feed-health"><div class="empty">No feed data yet — watch some streams</div></div>
+  </div>
+
+  <!-- Activity log -->
+  <div class="full-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="panel-title" style="margin-bottom:0">Recent Activity</div>
+      <span class="tag tag-live">Live</span>
+    </div>
+    <div id="activity-log"><div class="empty">No activity yet — go watch a game!</div></div>
+  </div>
+
+</div>
+
+<script>
+  const ACTIVITY_KEY = 'streamd_activity';
+  const HEALTH_KEY   = 'wsz_feed_health_v1';
+
+  function getActivity() {
+    try { return JSON.parse(localStorage.getItem(ACTIVITY_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function getHealth() {
+    try { return JSON.parse(localStorage.getItem(HEALTH_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function resetData() {
+    if (confirm('Reset all analytics data (including learned feed health)?')) {
+      localStorage.removeItem(ACTIVITY_KEY);
+      localStorage.removeItem(HEALTH_KEY);
+      render();
+    }
+  }
+
+  // Shared backend (same endpoint stream.html uses). Absent → local-only.
+  const HEALTH_API = '/api/feed-health';
+  let _globalHealth = {};
+  async function pullGlobalHealth() {
+    try {
+      const r = await fetch(HEALTH_API, { signal: AbortSignal.timeout(4000) });
+      if (r.ok) { const j = await r.json(); if (j && typeof j === 'object') _globalHealth = j; }
+    } catch (_) {}
+  }
+
+  // merge crowd (global) + this browser's unflushed (local) counts
+  function mergedHealth() {
+    const out = {};
+    const add = (src, key) => {
+      for (const [sig, r] of Object.entries(src || {})) {
+        const o = out[sig] || (out[sig] = { ok: 0, bad: 0, crowd: false });
+        o.ok += (r.ok || 0); o.bad += (r.bad || 0);
+        if (key === 'crowd') o.crowd = true;
+      }
+    };
+    add(_globalHealth, 'crowd');
+    add(getHealth(), 'local');
+    return out;
+  }
+
+  function renderFeedHealth() {
+    const store = mergedHealth();
+    const rows = Object.entries(store)
+      .map(([sig, r]) => {
+        const n = (r.ok || 0) + (r.bad || 0);
+        return { sig, n, rate: n ? (r.ok || 0) / n : 0, crowd: r.crowd };
+      })
+      .filter(x => x.n > 0)
+      .sort((a, b) => b.rate - a.rate || b.n - a.n);
+    const el = document.getElementById('feed-health');
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty">No feed data yet — watch some streams</div>';
+      return;
+    }
+    el.innerHTML = rows.map(({ sig, n, rate, crowd }) => {
+      const pct = Math.round(rate * 100);
+      const color = pct >= 60 ? 'var(--hd)' : pct >= 30 ? 'var(--accent)' : 'var(--live)';
+      const tag = crowd ? ' <span title="crowd-backed" style="color:var(--hd);font-size:9px">◆</span>' : '';
+      return `
+        <div class="bar-row">
+          <div class="bar-label" title="${sig}${crowd ? ' · crowd-backed' : ' · local only'}">${sig}${tag}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+          <div class="bar-count" style="width:64px">${pct}% · ${Math.round(n)}×</div>
+        </div>`;
+    }).join('');
+  }
+
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function fmtDate(ts) {
+    return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function buildBars(counts, container) {
+    if (!Object.keys(counts).length) {
+      container.innerHTML = '<div class="empty">No data yet</div>';
+      return;
+    }
+    const max = Math.max(...Object.values(counts));
+    const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 8);
+    container.innerHTML = sorted.map(([label, count]) => `
+      <div class="bar-row">
+        <div class="bar-label" title="${label}">${label}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.round((count/max)*100)}%"></div>
+        </div>
+        <div class="bar-count">${count}</div>
+      </div>`).join('');
+  }
+
+  function render() {
+    const a = getActivity();
+
+    // KPIs
+    document.getElementById('kpi-streams').textContent = a.streams || 0;
+    document.getElementById('kpi-views').textContent   = a.pageViews || 0;
+    document.getElementById('kpi-sports').textContent  = new Set(a.cats || []).size;
+    const days = a.firstVisit
+      ? Math.max(1, Math.ceil((Date.now() - a.firstVisit) / 86400000))
+      : 0;
+    document.getElementById('kpi-days').textContent    = days;
+    document.getElementById('kpi-views-sub').textContent =
+      a.firstVisit ? `since ${fmtDate(a.firstVisit)}` : 'all time';
+
+    document.getElementById('last-update').textContent =
+      `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+
+    // Sport breakdown
+    const catCounts = {};
+    (a.cats || []).forEach(c => { catCounts[c] = (catCounts[c] || 0) + 1; });
+    buildBars(catCounts, document.getElementById('sports-chart'));
+
+    // Stream breakdown
+    const streamCounts = {};
+    (a.events || [])
+      .filter(e => e.e === 'stream_click' && e.title)
+      .forEach(e => { streamCounts[e.title] = (streamCounts[e.title] || 0) + 1; });
+    buildBars(streamCounts, document.getElementById('streams-chart'));
+
+    // Feed reliability (learned source health)
+    renderFeedHealth();
+
+    // Activity log
+    const events = [...(a.events || [])].reverse().slice(0, 20);
+    if (!events.length) {
+      document.getElementById('activity-log').innerHTML =
+        '<div class="empty">No activity yet — go watch a game!</div>';
+    } else {
+      const DOT = { stream_click:'dot-stream', pageview:'dot-view', sport_filter:'dot-sport' };
+      document.getElementById('activity-log').innerHTML = events.map(e => `
+        <div class="log-item">
+          <div class="dot ${DOT[e.e] || 'dot-view'}"></div>
+          <span class="log-event">${
+            e.e === 'stream_click'  ? `▶ ${e.title || 'Stream'}` :
+            e.e === 'sport_filter'  ? `⚙ Filter: ${e.sport}` :
+            e.e === 'pageview'      ? '👁 Page view' : e.e
+          }</span>
+          <span class="log-time">${fmtTime(e.t)}</span>
+        </div>`).join('');
+    }
+  }
+
+  render();
+  pullGlobalHealth().then(render);            // pull crowd health, then repaint
+  setInterval(render, 10000);                 // refresh view every 10s
+  setInterval(pullGlobalHealth, 60000);       // refresh crowd data every 60s
+</script>
+</body>
+</html>

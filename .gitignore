@@ -1,0 +1,28 @@
+# dependencies / downloaded browsers (never commit — huge)
+node_modules/
+**/node_modules/
+
+# secrets & local runtime state
+canary/local/config.json
+canary/local/canary.log
+canary/local/canary-cursor.txt
+canary/wrangler.toml
+
+# SENSITIVE: kept out of a public repo
+transcripts/
+.remember/
+.claude/
+
+# scratch / downloaded analysis artifacts (not part of the site)
+bundle-jw.js
+embed_page.html
+embed_url.txt
+pl.m3u8
+*.m3u8
+_verify_*.js
+project/_verify_*.js
+
+# OS / editor cruft
+Thumbs.db
+.DS_Store
+*.log

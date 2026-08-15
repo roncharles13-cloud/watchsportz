@@ -1,0 +1,11 @@
+{
+  "endpoint": "https://watchsportz.pages.dev/api/feed-health",
+  "secret": "",
+  "apiBase": "https://streamed.st",
+  "sampleMatches": 6,
+  "maxFeeds": 8,
+  "playWaitMs": 9000,
+  "confirmMs": 3500,
+  "weight": 2,
+  "headless": false
+}

@@ -1,0 +1,1971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WatchSportZ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Warm up connections to the actual data/embed hosts before they're needed —
+     overlaps DNS + TLS handshake with page parse instead of paying that
+     latency cost at fetch-time or at first stream click. -->
+<link rel="preconnect" href="https://a.espncdn.com">
+<link rel="preconnect" href="https://embed.st">
+<link rel="preconnect" href="https://streamed.st">
+<!-- Fonts loaded non-render-blocking: preload the stylesheet, swap it in
+     once fetched, so the page shell (header/sidebar) paints immediately
+     instead of waiting on the Google Fonts round trip. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap"></noscript>
+<script defer data-domain="watchsportz.pages.dev" src="https://plausible.io/js/script.js"></script>
+<style>
+  :root {
+    --bg:      #080b0f;
+    --surface: #0e1318;
+    --border:  #1a2230;
+    --accent:  #e8a020;
+    --accent2: #3b82f6;
+    --live:    #ef4444;
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+    --card:    #111820;
+    --hd:      #22c55e;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── LAYOUT ── */
+  #app {
+    display: grid;
+    grid-template-rows: 48px 1fr;
+    grid-template-columns: 1fr 400px;
+    height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+
+  .wordmark {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .wordmark span { color: var(--text); }
+
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 8px var(--live);
+    animation: pulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .live-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--live);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  /* ── HEADER CONTROLS ── */
+  #player-controls {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    height: 100%;
+    flex-shrink: 0;
+  }
+  #player-controls.active { display: flex; }
+
+  .ctrl-btn {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .ctrl-btn:hover  { background: var(--surface); border-color: var(--muted); }
+  .ctrl-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
+  #vol-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 80px; height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+  #vol-slider::-moz-range-thumb {
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  .ctrl-divider { width:1px; height:18px; background:var(--border); flex-shrink:0; }
+
+  #match-title-bar {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── LIVE CLOCK ── */
+  #live-clock {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+    line-height: 1.3;
+    text-align: right;
+  }
+  #live-clock .clock-time {
+    font-size: 13px;
+    color: var(--text);
+    display: block;
+    letter-spacing: 1px;
+  }
+  #live-clock .clock-date {
+    font-size: 9px;
+    color: var(--muted);
+    display: block;
+    letter-spacing: 1.5px;
+  }
+
+  /* ── PLAYER ── */
+  #player-section {
+    position: relative;
+    background: #000;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  #idle-screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: radial-gradient(ellipse at center, #0d1520 0%, #080b0f 100%);
+    z-index: 1;
+  }
+  .idle-icon  { font-size: 48px; opacity: 0.15; filter: grayscale(1); }
+  .idle-text  {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+
+  #player-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    border: none;
+    display: none;
+    z-index: 2;
+  }
+
+  /* pause overlay */
+  #pause-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(8,11,15,0.88);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 3;
+    cursor: pointer;
+  }
+  #pause-overlay.show { display: flex; }
+
+  #pause-overlay-icon {
+    font-size: 54px; color: var(--text); opacity: 0.85;
+    transition: opacity 0.2s;
+  }
+  #pause-overlay-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 3px; text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  /* Reconnecting state */
+  #pause-overlay.reconnecting #pause-overlay-icon {
+    font-size: 28px;
+    animation: spin 0.9s linear infinite;
+    opacity: 1;
+  }
+  #pause-overlay.reconnecting #pause-overlay-label {
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  #pause-overlay.reconnecting { cursor: default; }
+
+  /* ── VOLUME BLOCK OVERLAY ──────────────────────────────────────────
+     Sits over the embed player's bottom-left corner where their native
+     volume control renders. z-index 6 = above iframe (z-index 2),
+     below stream-bar (z-index 4) and pause-overlay (z-index 3).
+     Width/height tuned to cover a typical player volume area.
+  ─────────────────────────────────────────────────────────────────── */
+  #vol-block {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 120px;
+    height: 100px;
+    z-index: 6;
+    display: none; /* shown once stream loads */
+  }
+
+  #vol-block.active { display: block; }
+
+  /* Our replacement volume widget rendered inside the block area */
+  #vol-widget {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(8,11,15,0.82);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    backdrop-filter: blur(4px);
+  }
+
+  #vol-widget-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  #vol-widget-track {
+    display: flex;
+    align-items: center;
+  }
+
+  #vol-widget-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 64px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  #vol-widget-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  #vol-widget-slider::-moz-range-thumb {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+  #stream-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: linear-gradient(rgba(0,0,0,0.85), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+    z-index: 4;
+  }
+  #player-section:hover #stream-bar { opacity: 1; }
+  /* Programmatic reveal (tap the switcher, or auto-show on load) — needed
+     on touch devices where there is no hover to expose the stream bar. */
+  #stream-bar.show { opacity: 1; }
+
+  .lang-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 9px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .lang-btn:hover, .lang-btn.active {
+    background: var(--accent); border-color: var(--accent); color: #000;
+  }
+  .lang-btn .lang-flag { font-size: 13px; }
+  .lang-btn.active .hd-badge { color:#000; border-color:#000; }
+
+  .hd-badge {
+    font-size: 9px; font-weight: 700;
+    color: var(--hd); padding: 1px 4px;
+    border: 1px solid var(--hd); border-radius: 2px; line-height: 1.4;
+  }
+
+  .stream-bar-msg {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; color: var(--muted);
+  }
+  .stream-bar-msg.error { color: #f87171; }
+
+  /* share button */
+  #share-btn {
+    position: absolute;
+    bottom: 12px; right: 14px;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.75);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    z-index: 4;
+    text-transform: uppercase;
+    opacity: 0;
+  }
+  #share-btn.visible { display: flex; }
+  #player-section:hover #share-btn.visible { opacity: 1; }
+  #share-btn:hover { background: var(--accent); border-color: var(--accent); color: #000; }
+
+  /* change-stream button — mirrors the share button but stays fully visible
+     (no hover gate) so it's reachable on mobile, where a dead stream would
+     otherwise leave the viewer stuck with no way to switch source. */
+  #sources-btn {
+    position: absolute;
+    bottom: 12px; left: 14px;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.75);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    z-index: 5;
+    text-transform: uppercase;
+  }
+  #sources-btn.visible { display: flex; }
+  #sources-btn:hover { background: var(--accent); border-color: var(--accent); color: #000; }
+  /* assisted-failover nudge: after ~9s with no confirmable playback, the
+     button pulses and becomes a one-tap "next feed". */
+  #sources-btn.nudge {
+    background: var(--accent); color: #000; border-color: var(--accent);
+    animation: wsz-nudge 1.1s ease-in-out infinite;
+  }
+  @keyframes wsz-nudge {
+    0%,100% { transform: scale(1);    box-shadow: 0 0 0 0   rgba(245,158,11,0.55); }
+    50%     { transform: scale(1.05); box-shadow: 0 0 0 7px rgba(245,158,11,0);   }
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 52px; left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--text); letter-spacing: 1px;
+    white-space: nowrap; z-index: 300;
+    opacity: 0; transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast-icon { color: var(--accent); margin-right: 6px; }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  #mode-tabs { display: flex; border-bottom: 1px solid var(--border); }
+
+  .mode-tab {
+    flex: 1; padding: 10px 0; text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    cursor: pointer; border: none; background: transparent;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .mode-tab:hover { color: var(--text); }
+  .mode-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .mode-tab .live-pip {
+    display: inline-block; width: 5px; height: 5px;
+    border-radius: 50%; background: var(--live);
+    margin-left: 4px; vertical-align: middle;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  #sport-tabs {
+    padding: 8px 14px;
+    display: flex; gap: 6px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sport-tab {
+    padding: 4px 10px; border-radius: 3px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; border: 1px solid var(--border);
+    color: var(--muted); background: transparent; transition: all 0.15s;
+  }
+  .sport-tab:hover { border-color: var(--accent); color: var(--accent); }
+  .sport-tab.active {
+    background: var(--accent); border-color: var(--accent);
+    color: #000; font-weight: 500;
+  }
+
+  #match-list {
+    overflow-y: auto;
+    padding: 12px 12px 56px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  #match-list::-webkit-scrollbar { width: 4px; }
+  #match-list::-webkit-scrollbar-track { background: transparent; }
+  #match-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .category-group-header {
+    display: flex; align-items: center; gap: 8px; padding: 14px 4px 6px;
+  }
+  .category-group-header span {
+    font-family: 'DM Mono', monospace; font-size: 9px;
+    letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted);
+  }
+  .category-group-header::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .match-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 13px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .match-card::before {
+    content: ''; position: absolute; left:0; top:0; bottom:0;
+    width: 3px; background: transparent; transition: background 0.15s;
+  }
+  .match-card:hover { border-color:#2a3545; background:#131c26; }
+  .match-card:hover::before { background: var(--accent2); }
+  .match-card.active { border-color: var(--accent); background:#1a1508; }
+  .match-card.active::before { background: var(--accent); }
+
+  /* Badges */
+  .team-badge {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    object-fit: contain;
+    background: #1e2a38;
+    flex-shrink: 0;
+  }
+  .team-badge-placeholder {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+    font-size: 10px; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Team names — flex:1 so they share available space equally */
+  .home-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+  }
+
+  .away-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .vs-divider {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    flex-shrink: 0;
+    letter-spacing: 1px;
+    padding: 0 2px;
+  }
+
+  /* Time pushed to far right */
+  .card-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+    letter-spacing: 0.5px;
+  }
+
+  /* Non-team-match title */
+  .card-title {
+    font-size: 13px; font-weight: 500; color: var(--text);
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .match-card.popular .card-title::after {
+    content: ' ★'; color: var(--accent); font-size: 10px;
+  }
+
+  .date-group-header {
+    font-family: 'DM Mono', monospace; font-size: 9px;
+    letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+    padding: 8px 4px 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+  }
+
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-family: 'DM Mono', monospace; font-size: 8px;
+    color: var(--live); letter-spacing: 1px; font-weight: 500;
+    padding: 1px 5px; border: 1px solid var(--live);
+    border-radius: 2px; margin-left: 6px; vertical-align: middle;
+  }
+  .live-badge::before {
+    content: ''; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--live); animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  .over-badge {
+    display: inline-flex; align-items: center;
+    font-family: 'DM Mono', monospace; font-size: 8px;
+    color: var(--muted); letter-spacing: 1px; font-weight: 500;
+    padding: 1px 5px; border: 1px solid var(--border);
+    border-radius: 2px; margin-left: 6px; vertical-align: middle;
+  }
+
+  .state-msg {
+    padding: 32px 16px; text-align: center;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    color: var(--muted); letter-spacing: 1px;
+  }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-msg { color: #f87171; }
+  .retry-btn {
+    margin-top: 10px;
+    background: var(--card);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .retry-btn:hover { background: rgba(232,160,32,0.12); }
+
+  /* ── LIVE TICKER ── */
+  #live-ticker {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; height: 36px;
+    background: #060910;
+    border-top: 2px solid var(--live);
+    z-index: 100;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+  }
+  #ticker-label {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 12px; height: 100%;
+    background: var(--live); border-right: none; flex-shrink: 0; z-index: 2;
+  }
+  #ticker-label span {
+    font-family: 'Bebas Neue', sans-serif; font-size: 13px;
+    letter-spacing: 2px; color: #fff; line-height: 1;
+  }
+  .ticker-live-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #fff;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  #ticker-scroll-wrap {
+    flex: 1; overflow: hidden; position: relative; height: 100%;
+  }
+  #ticker-scroll-wrap::before,
+  #ticker-scroll-wrap::after {
+    content: ''; position: absolute; top:0; bottom:0; width: 24px;
+    z-index: 2; pointer-events: none;
+  }
+  #ticker-scroll-wrap::before { left:0; background:linear-gradient(to right,#060910,transparent); }
+  #ticker-scroll-wrap::after  { right:0; background:linear-gradient(to left,#060910,transparent); }
+  #ticker-inner {
+    display: flex; align-items: center; height: 100%;
+    animation: ticker-scroll linear infinite; white-space: nowrap;
+  }
+  #ticker-inner:hover { animation-play-state: paused; }
+  @keyframes ticker-scroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+  .t-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 0 16px; height: 36px;
+    border-right: 1px solid var(--border); flex-shrink: 0; cursor: default;
+  }
+  .t-chip:hover { background: #0e1318; }
+  .t-badge {
+    width: 18px; height: 18px; border-radius: 50%;
+    object-fit: contain; background: #1e2a38; flex-shrink: 0;
+  }
+  .t-badge-placeholder {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--border); flex-shrink: 0;
+    font-size: 9px; display:flex; align-items:center; justify-content:center; color:var(--muted);
+  }
+  .t-matchup { font-size: 11px; font-weight: 500; color: var(--text); }
+  .t-sep     { font-family:'DM Mono',monospace; font-size:8px; color:var(--muted); padding:0 1px; }
+  .t-cat     { font-family:'DM Mono',monospace; font-size:8px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .t-live-pip{ width:4px; height:4px; border-radius:50%; background:var(--live); animation:pulse 1.6s ease-in-out infinite; flex-shrink:0; }
+  .t-time    { font-family:'DM Mono',monospace; font-size:9px; color:var(--accent); letter-spacing:0.5px; }
+  .t-score   { font-family:'Bebas Neue',sans-serif; font-size:15px; color:var(--text); letter-spacing:1px; flex-shrink:0; }
+  .t-score-sep{ font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); padding:0 1px; }
+  .t-status  { font-family:'DM Mono',monospace; font-size:8px; color:var(--accent); letter-spacing:0.5px; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="wordmark">WatchSport<span>Z</span></div>
+    <div class="live-dot"></div>
+    <div class="live-label">Live</div>
+
+    <!-- Controls — in header DOM, completely outside iframe -->
+    <div id="player-controls">
+      <button class="ctrl-btn" id="ctrl-play" title="Play / Pause" onclick="ctrlPlay()">⏸</button>
+      <div class="ctrl-divider"></div>
+      <button class="ctrl-btn" id="ctrl-mute" title="Mute / Unmute" onclick="ctrlMute()">🔊</button>
+      <input type="range" id="vol-slider" min="0" max="100" value="100"
+             title="Volume" oninput="ctrlVolume(this.value)">
+    </div>
+
+    <div id="match-title-bar">— select a match to begin —</div>
+
+    <div id="live-clock">
+      <span class="clock-time" id="clock-time">--:-- --</span>
+      <span class="clock-date" id="clock-date">--- --- --</span>
+    </div>
+  </header>
+
+  <section id="player-section">
+    <div id="idle-screen">
+      <div class="idle-icon">📡</div>
+      <div class="idle-text">No stream selected</div>
+    </div>
+    <!-- SANDBOX TRADEOFF (2026-08-15) ─────────────────────────────────────
+         embed.st now detects a restrictive sandbox and REFUSES to play
+         ("Remove sandbox attributes on the iframe tag") because its popup ads
+         can't fire — and it mints the video token through that same ad flow
+         (a WASM + POST /fetch handshake, session/fingerprint-bound), so a
+         tight sandbox literally means no video. We add allow-popups +
+         user-activation-gated top-navigation so the stream plays.
+
+         WHAT THIS LETS BACK IN:
+           • popup/popunder windows — the embed's window.open now works
+           • click-through redirects, but ONLY on a genuine user gesture
+         WHAT STILL BLOCKS/DAMPENS IT:
+           • NO allow-popups-to-escape-sandbox → popups inherit this sandbox
+             and can't freely chain more popups
+           • NO allow-modals, NO unconditional top-navigation
+           • the JS dampeners below (window.open override, blur-kill, _blank
+             interception) still run and neutralise part of it
+         Full ad removal would need a stripping/rewriting media proxy, which
+         is not achievable from static hosting and is blocked by the embed's
+         session-bound token — see the source-resilience notes. -->
+    <iframe id="player-frame" allowfullscreen allow="autoplay; fullscreen"
+            referrerpolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups allow-top-navigation-by-user-activation"></iframe>
+    <div id="pause-overlay">
+      <div id="pause-overlay-icon">▶</div>
+      <div id="pause-overlay-label">Paused — click to resume</div>
+    </div>
+    <!-- Surgical overlay — covers the embed player's native volume control
+         in the bottom-left corner. Blocks user interaction with their UI.
+         Our header slider + postMessage is the only volume interface. -->
+    <div id="vol-block">
+      <div id="vol-widget">
+        <button id="vol-widget-btn" onclick="ctrlMute()" title="Mute / Unmute">🔊</button>
+        <div id="vol-widget-track">
+          <input type="range" id="vol-widget-slider"
+                 min="0" max="100" value="100"
+                 oninput="ctrlVolume(this.value); syncVolSliders(this.value);">
+        </div>
+      </div>
+    </div>
+
+    <div id="stream-bar"></div>
+    <button id="sources-btn" onclick="onSourcesBtn()" title="Change stream / source"></button>
+    <button id="share-btn" onclick="shareMatch()">⬆ Share</button>
+  </section>
+
+  <div id="live-ticker">
+    <div id="ticker-label">
+      <div class="ticker-live-dot"></div>
+      <span>LIVE</span>
+    </div>
+    <div id="ticker-scroll-wrap">
+      <div id="ticker-inner"></div>
+    </div>
+  </div>
+
+  <aside id="sidebar">
+    <div id="mode-tabs">
+      <button class="mode-tab active" data-mode="live">Live <span class="live-pip"></span></button>
+      <button class="mode-tab" data-mode="today">Today</button>
+      <button class="mode-tab" data-mode="all">Upcoming</button>
+    </div>
+    <div id="sport-tabs">
+      <button class="sport-tab active" data-sport="all">All</button>
+    </div>
+    <div id="match-list">
+      <div class="state-msg"><div class="spinner"></div><br>Loading matches…</div>
+    </div>
+  </aside>
+
+</div>
+
+<div id="toast"><span id="toast-icon">✓</span><span id="toast-msg"></span></div>
+
+<script>
+  /* ── POPUP KILL ── */
+  (() => {
+    const _real = window.open.bind(window);
+    window.open = () => null;
+    const burn = () => {
+      try {
+        const w = _real('about:blank','_blank','width=1,height=1,left=-9999,top=-9999');
+        if (w) setTimeout(() => { try{w.close();}catch(_){} }, 100);
+      } catch(_) {}
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      const f = document.getElementById('player-frame');
+      f.addEventListener('mousedown', burn, {capture:true,passive:true});
+      f.addEventListener('touchstart', burn, {capture:true,passive:true});
+    });
+    document.addEventListener('click', e => {
+      const a = e.target.closest('a[target]');
+      if (!a) return;
+      const t = a.getAttribute('target') || '';
+      if ((t==='_blank'||t==='_top'||t==='_parent') &&
+           a.href && !a.href.startsWith(location.origin)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+      }
+    }, {capture:true});
+  })();
+
+  /* ── API — single canonical source, with retry ────────────────
+     streamed.st is the sole data source: the surviving official
+     mirror of the streamed.* API. One host serves the live/today/all
+     match lists, per-source stream lookups, the sports list, and
+     team-badge images — everything the app needs — with permissive
+     CORS (access-control-allow-origin: *), so this static site can
+     call it straight from the browser. 502/503/504 are treated as
+     transient and retried before an error is surfaced.
+     (streamed.pk, the previous host, is dead; see the operators' own
+     status page at strmd.link which lists streamed.st as Online.)
+  ──────────────────────────────────────────────────────────────── */
+  const API_HOST = 'https://streamed.st';
+
+  async function apiFetch(path, retries = 2, onRetry = null) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(`${API_HOST}/api${path}`, {
+          signal: AbortSignal.timeout(5000), // 5s — fail fast, don't hang the UI
+        });
+        if ([502, 503, 504].includes(res.status) && attempt < retries) {
+          if (onRetry) onRetry(attempt + 1, retries, `HTTP ${res.status}`);
+          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          continue;
+        }
+        return res;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < retries) {
+          if (onRetry) onRetry(attempt + 1, retries, 'timeout');
+          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          continue;
+        }
+      }
+    }
+    throw lastErr || new Error('Request failed after retries');
+  }
+
+  // Legacy compatibility for any `${API}/...` string concatenation
+  const API = `${API_HOST}/api`;
+
+  const BLOCKED_CATS = new Set(['darts','cricket','football','billiards','rugby','afl']);
+
+  /* ── STREAM EMBED URL ──────────────────────────────────────────
+     Streams embed straight from the source host. A local Node proxy
+     (proxy-server.js) used to sit in front for ad-stripping + player
+     control, but it was never deployed, so in production the embed
+     URL is used as-is. Kept as a single seam in case a hosted proxy
+     is added later.
+  ────────────────────────────────────────────────────────────── */
+  function buildEmbedUrl(originalUrl) {
+    return originalUrl;
+  }
+
+  const $matchList    = document.getElementById('match-list');
+  const $sportTabs    = document.getElementById('sport-tabs');
+  const $modeTabs     = document.getElementById('mode-tabs');
+  const $playerFrame  = document.getElementById('player-frame');
+  const $idleScreen   = document.getElementById('idle-screen');
+  const $streamBar    = document.getElementById('stream-bar');
+  const $titleBar     = document.getElementById('match-title-bar');
+
+  let currentMode  = 'live';
+  let currentSport = 'all';
+  let activeCard   = null;
+  let allMatches   = [];
+  let _currentMatch = null;
+
+  /* blur kill */
+  let _blurTimer, _blurActive = false;
+  const _onBlur  = () => { _blurTimer = setTimeout(()=>{try{window.focus();}catch(_){}},50); };
+  const _onFocus = () => clearTimeout(_blurTimer);
+  function activateBlurKill() {
+    if (_blurActive) return;
+    window.addEventListener('blur',  _onBlur);
+    window.addEventListener('focus', _onFocus);
+    _blurActive = true;
+  }
+
+  /* ── CONSTANTS ── */
+  const LIVE_WINDOW_MS = 3.5 * 3600 * 1000; // 3.5 hours — used by isLive + ticker
+
+  /* ── UTILS ── */
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }
+  function fmtDate(ts) {
+    const d=new Date(ts), t=new Date(), m=new Date(); m.setDate(m.getDate()+1);
+    if (d.toDateString()===t.toDateString()) return 'Today';
+    if (d.toDateString()===m.toDateString()) return 'Tomorrow';
+    return d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+  }
+  function isLive(m) {
+    // Matches from the /matches/live endpoint are flagged _live=true and are
+    // authoritatively live (a long baseball game is still live at 4h). Others
+    // fall back to a start-time + window heuristic for the LIVE badge.
+    if (m._live) return true;
+    const n=Date.now(); return n>=m.date && n<=m.date+LIVE_WINDOW_MS;
+  }
+  function hasEnded(m) {
+    if (m._live) return false;               // endpoint says it's live
+    return m.date + LIVE_WINDOW_MS < Date.now();
+  }
+  function getDisplayTitle(m) {
+    const h=m.teams?.home?.name, a=m.teams?.away?.name;
+    return (h&&a) ? `${h} vs ${a}` : m.title;
+  }
+
+  /* ── TEAM LOGOS ── */
+  const ESPN = 'https://a.espncdn.com/i/teamlogos';
+  const TEAM_LOGOS = {
+    'hawks':`${ESPN}/nba/500/atl.png`,'celtics':`${ESPN}/nba/500/bos.png`,
+    'nets':`${ESPN}/nba/500/bkn.png`,'hornets':`${ESPN}/nba/500/cha.png`,
+    'bulls':`${ESPN}/nba/500/chi.png`,'cavaliers':`${ESPN}/nba/500/cle.png`,
+    'cavs':`${ESPN}/nba/500/cle.png`,'mavericks':`${ESPN}/nba/500/dal.png`,
+    'mavs':`${ESPN}/nba/500/dal.png`,'nuggets':`${ESPN}/nba/500/den.png`,
+    'pistons':`${ESPN}/nba/500/det.png`,'warriors':`${ESPN}/nba/500/gs.png`,
+    'rockets':`${ESPN}/nba/500/hou.png`,'pacers':`${ESPN}/nba/500/ind.png`,
+    'clippers':`${ESPN}/nba/500/lac.png`,'lakers':`${ESPN}/nba/500/lal.png`,
+    'grizzlies':`${ESPN}/nba/500/mem.png`,'heat':`${ESPN}/nba/500/mia.png`,
+    'bucks':`${ESPN}/nba/500/mil.png`,'timberwolves':`${ESPN}/nba/500/min.png`,
+    'pelicans':`${ESPN}/nba/500/no.png`,'knicks':`${ESPN}/nba/500/ny.png`,
+    'thunder':`${ESPN}/nba/500/okc.png`,'magic':`${ESPN}/nba/500/orl.png`,
+    '76ers':`${ESPN}/nba/500/phi.png`,'sixers':`${ESPN}/nba/500/phi.png`,
+    'suns':`${ESPN}/nba/500/phx.png`,'blazers':`${ESPN}/nba/500/por.png`,
+    'kings':`${ESPN}/nba/500/sac.png`,'spurs':`${ESPN}/nba/500/sa.png`,
+    'raptors':`${ESPN}/nba/500/tor.png`,'jazz':`${ESPN}/nba/500/utah.png`,
+    'wizards':`${ESPN}/nba/500/wsh.png`,
+    'diamondbacks':`${ESPN}/mlb/500/ari.png`,'braves':`${ESPN}/mlb/500/atl.png`,
+    'orioles':`${ESPN}/mlb/500/bal.png`,'red sox':`${ESPN}/mlb/500/bos.png`,
+    'cubs':`${ESPN}/mlb/500/chc.png`,'white sox':`${ESPN}/mlb/500/chw.png`,
+    'reds':`${ESPN}/mlb/500/cin.png`,'guardians':`${ESPN}/mlb/500/cle.png`,
+    'rockies':`${ESPN}/mlb/500/col.png`,'tigers':`${ESPN}/mlb/500/det.png`,
+    'astros':`${ESPN}/mlb/500/hou.png`,'royals':`${ESPN}/mlb/500/kc.png`,
+    'angels':`${ESPN}/mlb/500/laa.png`,'dodgers':`${ESPN}/mlb/500/lad.png`,
+    'marlins':`${ESPN}/mlb/500/mia.png`,'brewers':`${ESPN}/mlb/500/mil.png`,
+    'twins':`${ESPN}/mlb/500/min.png`,'mets':`${ESPN}/mlb/500/nym.png`,
+    'yankees':`${ESPN}/mlb/500/nyy.png`,'athletics':`${ESPN}/mlb/500/oak.png`,
+    'phillies':`${ESPN}/mlb/500/phi.png`,'pirates':`${ESPN}/mlb/500/pit.png`,
+    'padres':`${ESPN}/mlb/500/sd.png`,'mariners':`${ESPN}/mlb/500/sea.png`,
+    'giants':`${ESPN}/mlb/500/sf.png`,'cardinals':`${ESPN}/mlb/500/stl.png`,
+    'rays':`${ESPN}/mlb/500/tb.png`,'rangers':`${ESPN}/mlb/500/tex.png`,
+    'blue jays':`${ESPN}/mlb/500/tor.png`,'nationals':`${ESPN}/mlb/500/wsh.png`,
+    'falcons':`${ESPN}/nfl/500/atl.png`,'ravens':`${ESPN}/nfl/500/bal.png`,
+    'bills':`${ESPN}/nfl/500/buf.png`,'panthers':`${ESPN}/nfl/500/car.png`,
+    'bears':`${ESPN}/nfl/500/chi.png`,'bengals':`${ESPN}/nfl/500/cin.png`,
+    'browns':`${ESPN}/nfl/500/cle.png`,'cowboys':`${ESPN}/nfl/500/dal.png`,
+    'broncos':`${ESPN}/nfl/500/den.png`,'lions':`${ESPN}/nfl/500/det.png`,
+    'packers':`${ESPN}/nfl/500/gb.png`,'texans':`${ESPN}/nfl/500/hou.png`,
+    'colts':`${ESPN}/nfl/500/ind.png`,'jaguars':`${ESPN}/nfl/500/jax.png`,
+    'chiefs':`${ESPN}/nfl/500/kc.png`,'raiders':`${ESPN}/nfl/500/lv.png`,
+    'chargers':`${ESPN}/nfl/500/lac.png`,'rams':`${ESPN}/nfl/500/lar.png`,
+    'dolphins':`${ESPN}/nfl/500/mia.png`,'vikings':`${ESPN}/nfl/500/min.png`,
+    'patriots':`${ESPN}/nfl/500/ne.png`,'saints':`${ESPN}/nfl/500/no.png`,
+    'jets':`${ESPN}/nfl/500/nyj.png`,'eagles':`${ESPN}/nfl/500/phi.png`,
+    'steelers':`${ESPN}/nfl/500/pit.png`,'49ers':`${ESPN}/nfl/500/sf.png`,
+    'seahawks':`${ESPN}/nfl/500/sea.png`,'buccaneers':`${ESPN}/nfl/500/tb.png`,
+    'titans':`${ESPN}/nfl/500/ten.png`,'commanders':`${ESPN}/nfl/500/wsh.png`,
+    'bruins':`${ESPN}/nhl/500/bos.png`,'sabres':`${ESPN}/nhl/500/buf.png`,
+    'flames':`${ESPN}/nhl/500/cgy.png`,'hurricanes':`${ESPN}/nhl/500/car.png`,
+    'blackhawks':`${ESPN}/nhl/500/chi.png`,'avalanche':`${ESPN}/nhl/500/col.png`,
+    'blue jackets':`${ESPN}/nhl/500/cbj.png`,'stars':`${ESPN}/nhl/500/dal.png`,
+    'red wings':`${ESPN}/nhl/500/det.png`,'oilers':`${ESPN}/nhl/500/edm.png`,
+    'wild':`${ESPN}/nhl/500/min.png`,'canadiens':`${ESPN}/nhl/500/mtl.png`,
+    'predators':`${ESPN}/nhl/500/nsh.png`,'devils':`${ESPN}/nhl/500/nj.png`,
+    'islanders':`${ESPN}/nhl/500/nyi.png`,'senators':`${ESPN}/nhl/500/ott.png`,
+    'flyers':`${ESPN}/nhl/500/phi.png`,'penguins':`${ESPN}/nhl/500/pit.png`,
+    'sharks':`${ESPN}/nhl/500/sj.png`,'kraken':`${ESPN}/nhl/500/sea.png`,
+    'blues':`${ESPN}/nhl/500/stl.png`,'lightning':`${ESPN}/nhl/500/tb.png`,
+    'maple leafs':`${ESPN}/nhl/500/tor.png`,'canucks':`${ESPN}/nhl/500/van.png`,
+    'golden knights':`${ESPN}/nhl/500/vgk.png`,'capitals':`${ESPN}/nhl/500/wsh.png`,
+  };
+
+  const LEAGUE_PREFIX = {
+    'basketball':'nba','nba':'nba','baseball':'mlb','mlb':'mlb',
+    'american-football':'nfl','nfl':'nfl','hockey':'nhl','nhl':'nhl',
+  };
+
+  function getTeamLogo(name, category) {
+    if (!name) return null;
+    const n = name.toLowerCase();
+    const league = category ? LEAGUE_PREFIX[category.toLowerCase()] : null;
+    if (league) {
+      for (const [kw,url] of Object.entries(TEAM_LOGOS))
+        if (url.includes(`/${league}/`) && n.includes(kw)) return url;
+    }
+    for (const [kw,url] of Object.entries(TEAM_LOGOS))
+      if (n.includes(kw)) return url;
+    return null;
+  }
+
+  // Resolve a badge value into a real image URL. streamed.st gives one of:
+  //   • an absolute URL (…streamed.st/api/images/badge/<id>.webp) → use as-is
+  //   • a root-relative path (/api/images/…)                      → prefix host
+  //   • an opaque badge id ("GwZg7AZ…")                           → build the URL
+  function badgeUrl(ss) {
+    if (!ss) return null;
+    if (/^https?:\/\//i.test(ss)) return ss;
+    if (ss.startsWith('/'))       return `${API_HOST}${ss}`;
+    return `${API_HOST}/api/images/badge/${ss}.webp`;
+  }
+
+  window._badgeErr = function(el, name, ssrc) {
+    const next = badgeUrl(ssrc);
+    if (el.dataset.stage==='espn' && next) {
+      el.dataset.stage='streamed'; el.src=next;
+    } else if (el.parentNode) {   // guard: lazy img may already be detached
+      el.outerHTML='<div class="team-badge-placeholder"></div>';
+    }
+  };
+
+  function badgeImg(src, name, category) {
+    const espn = getTeamLogo(name, category);
+    const safe = (name||'').replace(/'/g,'');
+    const ss   = (src||'').replace(/'/g,'');
+    if (espn) return `<img class="team-badge" loading="lazy" src="${espn}" alt="${safe}" data-stage="espn" onerror="window._badgeErr(this,'${safe}','${ss}')">`;
+    const url = badgeUrl(ss);
+    if (url) {
+      return `<img class="team-badge" loading="lazy" src="${url}" alt="${safe}" data-stage="streamed" onerror="window._badgeErr(this,'${safe}','')">`;
+    }
+    return '<div class="team-badge-placeholder"></div>';
+  }
+
+  /* ── PLAYER CONTROLS ── */
+  let _paused = false, _muted = false, _vol = 100, _streamUrl = '', _resumeCheck;
+  let _isReconnecting = false; // explicit flag — prevents double-click during reconnect
+
+  function _postMsg(d) { try { $playerFrame.contentWindow?.postMessage(d,'*'); } catch(_){} }
+
+  // Wire pause overlay click — guarded against reconnecting state
+  document.getElementById('pause-overlay').addEventListener('click', () => {
+    if (!_isReconnecting) ctrlPlay();
+  });
+
+  function ctrlPlay() {
+    if (_isReconnecting) return;
+
+    const btn = document.getElementById('ctrl-play');
+    const ovl = document.getElementById('pause-overlay');
+    const lbl = document.getElementById('pause-overlay-label');
+    const ico = document.getElementById('pause-overlay-icon');
+
+    if (!_paused) {
+      $playerFrame.src = 'about:blank';
+      clearTimeout(_resumeCheck);
+      ovl.classList.remove('reconnecting');
+      ico.textContent = '▶';
+      lbl.textContent = 'PAUSED — TAP TO REJOIN LIVE';
+      ovl.classList.add('show');
+      btn.textContent = '▶';
+      btn.classList.add('active');
+      _paused = true;
+    } else {
+      _isReconnecting = true;
+      ovl.classList.add('reconnecting');
+      ico.textContent = '↻';
+      lbl.textContent = 'RECONNECTING TO LIVE…';
+      btn.textContent = '⏸';
+      btn.classList.remove('active');
+      _paused = false;
+
+      _resumeCheck = setTimeout(() => {
+        $playerFrame.src = _streamUrl;
+        const onLoaded = () => {
+          _isReconnecting = false;
+          ovl.classList.remove('show', 'reconnecting');
+          ico.textContent = '▶';
+          lbl.textContent = 'PAUSED — TAP TO REJOIN LIVE';
+          _startVideoPolling();
+          $playerFrame.removeEventListener('load', onLoaded);
+          clearTimeout(_safetyDismiss);
+        };
+        $playerFrame.addEventListener('load', onLoaded);
+        clearTimeout(_safetyDismiss);
+        _safetyDismiss = setTimeout(() => {
+          if (_isReconnecting) {
+            _isReconnecting = false;
+            ovl.classList.remove('show', 'reconnecting');
+            _startVideoPolling();
+          }
+        }, 4000);
+      }, 80);
+    }
+  }
+
+  let _safetyDismiss;
+
+  function ctrlMute() {
+    _muted = !_muted;
+    _applyVolume(_muted ? 0 : _vol);
+    const btn = document.getElementById('ctrl-mute');
+    btn.textContent = _muted ? '🔇' : (_vol < 50 ? '🔉' : '🔊');
+    btn.classList.toggle('active', _muted);
+    const s = document.getElementById('vol-slider');
+    if (_muted) { s.value = 0; s.style.background = 'var(--border)'; }
+    else         { s.value = _vol; _fillSlider(_vol); }
+    syncVolSliders(_muted ? 0 : _vol);
+  }
+
+  function ctrlVolume(val) {
+    _vol   = Number(val);
+    _muted = _vol === 0;
+    _applyVolume(_vol);
+    const btn = document.getElementById('ctrl-mute');
+    btn.textContent = _muted ? '🔇' : (_vol < 50 ? '🔉' : '🔊');
+    btn.classList.toggle('active', _muted);
+    _fillSlider(_vol);
+  }
+
+  function _fillSlider(v) {
+    document.getElementById('vol-slider').style.background =
+      `linear-gradient(to right,var(--accent) ${v}%,var(--border) ${v}%)`;
+  }
+
+  let _boundVideo = null;
+  let _pollTimer  = null;
+
+  function _applyVolume(pct) {
+    const linear = Math.max(0, Math.min(1, pct / 100));
+    if (_boundVideo) {
+      try { _boundVideo.volume = linear; _boundVideo.muted = pct === 0; }
+      catch(_) { _boundVideo = null; }
+    }
+    const msgs = [
+      { action:    'volume',       value:   linear },
+      { event:     'volumechange', volume:  linear },
+      { jwCommand: 'setVolume',    volume:  Math.round(pct) },
+      { api:       'volume',       value:   linear },
+      { method:    'setVolume',    args:    [linear] },
+    ];
+    msgs.forEach(m => _postMsg(m));
+  }
+
+  function _startVideoPolling() {
+    clearInterval(_pollTimer);
+    _boundVideo = null;
+    let attempts = 0;
+    _pollTimer = setInterval(() => {
+      attempts++;
+      try {
+        const v = $playerFrame.contentDocument?.querySelector('video');
+        if (v && v.readyState >= 1) {
+          _boundVideo = v;
+          v.volume = _vol / 100;
+          v.muted  = _muted;
+          clearInterval(_pollTimer);
+          return;
+        }
+      } catch(_) {}
+      if (attempts >= 16) clearInterval(_pollTimer);
+    }, 500);
+  }
+
+  /* ── LOAD STREAM ── */
+  function loadStream(stream, match) {
+    _endActiveFeed();          // close out the previous feed (records its health)
+    _streamUrl = buildEmbedUrl(stream.embedUrl);
+    _paused    = false;
+    _isReconnecting = false;
+    _boundVideo = null;
+    clearTimeout(_resumeCheck);
+    clearTimeout(_safetyDismiss);
+    clearInterval(_pollTimer);
+
+    const ovl = document.getElementById('pause-overlay');
+    ovl.classList.remove('show', 'reconnecting');
+
+    $idleScreen.style.display  = 'none';
+    $playerFrame.style.display = 'block';
+    $playerFrame.src = _streamUrl;
+    activateBlurKill();
+
+    const pb = document.getElementById('ctrl-play');
+    const mb = document.getElementById('ctrl-mute');
+    if (pb) { pb.textContent='⏸'; pb.classList.remove('active'); }
+    if (mb) { mb.textContent='🔊'; mb.classList.remove('active'); }
+    const sl = document.getElementById('vol-slider');
+    if (sl) { sl.value=100; _fillSlider(100); }
+    _vol=100; _muted=false;
+
+    const onLoaded = () => {
+      _startVideoPolling();
+      $playerFrame.removeEventListener('load', onLoaded);
+    };
+    $playerFrame.addEventListener('load', onLoaded);
+    _startVideoPolling();
+
+    document.getElementById('player-controls').classList.add('active');
+    document.getElementById('share-btn').classList.add('visible');
+    document.getElementById('vol-block').classList.add('active');
+    syncVolSliders(100);
+
+    // reset the failover nudge for this fresh feed + start health/watchdog tracking
+    const sbtn=document.getElementById('sources-btn');
+    if(sbtn){ sbtn.classList.remove('nudge');
+      if(_feedQueue.length) sbtn.textContent=`📺 ${_feedQueue.length} feed${_feedQueue.length>1?'s':''}`; }
+    _beginActiveFeed(stream, match);
+  }
+
+  /* ── LANGUAGE FLAGS ── */
+  const LANG_FLAGS = {
+    'english':{flag:'🇬🇧',label:'EN'},'spanish':{flag:'🇪🇸',label:'ES'},
+    'french':{flag:'🇫🇷',label:'FR'},'german':{flag:'🇩🇪',label:'DE'},
+    'portuguese':{flag:'🇧🇷',label:'PT'},'italian':{flag:'🇮🇹',label:'IT'},
+    'arabic':{flag:'🇸🇦',label:'AR'},'dutch':{flag:'🇳🇱',label:'NL'},
+    'turkish':{flag:'🇹🇷',label:'TR'},'russian':{flag:'🇷🇺',label:'RU'},
+    'chinese':{flag:'🇨🇳',label:'ZH'},'japanese':{flag:'🇯🇵',label:'JA'},
+    'korean':{flag:'🇰🇷',label:'KO'},'hindi':{flag:'🇮🇳',label:'HI'},
+    'polish':{flag:'🇵🇱',label:'PL'},'romanian':{flag:'🇷🇴',label:'RO'},
+    'greek':{flag:'🇬🇷',label:'GR'},'czech':{flag:'🇨🇿',label:'CS'},
+    'swedish':{flag:'🇸🇪',label:'SV'},'norwegian':{flag:'🇳🇴',label:'NO'},
+  };
+  function getLangMeta(lang) {
+    return LANG_FLAGS[(lang||'').toLowerCase().trim()] || {flag:'🌐',label:lang||'?'};
+  }
+
+  /* ══ RESILIENCE LAYER ═══════════════════════════════════════════════
+     Providers → feeds → learned health → smart default + assisted
+     failover. Static-site-safe: health is learned per-browser in
+     localStorage. Adding a provider later = one entry in PROVIDERS. ══ */
+
+  // Provider registry. Only streamed.st is live today, but routing matches
+  // through here makes a new/replacement provider a config change, not a code
+  // change (streamed.pk→streamed.st was a manual one-liner; this generalises
+  // it). adapt() would normalise a provider's match into the canonical shape;
+  // streamed.st is already canonical, so identity.
+  const PROVIDERS = [
+    { id:'streamed-st', name:'Streamed', base: API_HOST, primary:true,
+      endpoints:{ sports:'/sports', live:'/matches/live', today:'/matches/all-today',
+                  all:'/matches/all', stream:(s,i)=>`/stream/${s}/${i}` },
+      adapt:(m)=>m },
+  ];
+  const PROVIDER_ID = PROVIDERS[0].id;
+  const feedSig = (provider, source) => `${provider||PROVIDER_ID}/${source||'?'}`;
+
+  /* Optional shared backend. If a Cloudflare Pages Function + KV is deployed
+     here, feed-health is pooled across ALL viewers; if it's absent/unreachable
+     everything degrades silently to per-browser localStorage. Relative URL so
+     it "just works" same-origin on Pages. Set to '' to force local-only. */
+  const HEALTH_API = '/api/feed-health';
+
+  /* Feed-health store — learns which source types actually work. Keyed by
+     "provider/source" (stable; individual stream URLs are ephemeral). A source
+     that won't resolve, or a stream the viewer bails on quickly, sinks; a
+     stream watched ≥ DWELL_OK rises. Unknown = neutral 0.5 prior. This is what
+     stops `echo` (≈0% resolve) from being picked first ahead of `admin`.
+
+     Two layers: `global` = crowd snapshot pulled from the backend; `pending` =
+     this browser's outcomes not yet flushed (localStorage — also the complete
+     local history when no backend is deployed). Score merges both, so a brand-
+     new visitor already benefits from everyone else's experience, and their own
+     playback keeps refining it. No double-count: flushed deltas move out of
+     `pending` into `global`. */
+  const FeedHealth = (() => {
+    const KEY='wsz_feed_health_v1', DWELL_OK=30000, FLUSH_MS=90000;
+    let pending={}, global={};
+    try{ pending=JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(_){}
+    const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(pending)); }catch(_){} };
+
+    function record(sig, ok){
+      if(!sig) return;
+      const r = pending[sig] || (pending[sig]={ok:0,bad:0});
+      r[ok?'ok':'bad'] += 1; save();
+      _maybeFlush();
+    }
+    const _c=(m,sig)=> m[sig] || {ok:0,bad:0};
+    function score(sig){
+      const g=_c(global,sig), p=_c(pending,sig);
+      const ok=(g.ok||0)+(p.ok||0), n=ok+(g.bad||0)+(p.bad||0);
+      return n ? (ok+1)/(n+2) : 0.5;   // Laplace-smoothed over crowd + local
+    }
+    const rank=(items,sigOf)=>items.map((it,i)=>({it,i,s:score(sigOf(it))}))
+                                   .sort((a,b)=>b.s-a.s||a.i-b.i).map(x=>x.it);
+
+    // ── shared-backend sync (every failure is a silent no-op) ──────────
+    let _lastFlush=0, _flushing=false;
+    const _hasPending=()=>Object.keys(pending).length>0;
+    async function pullGlobal(){
+      if(!HEALTH_API) return;
+      try{
+        const r=await fetch(HEALTH_API,{signal:AbortSignal.timeout(4000)});
+        if(r.ok){ const j=await r.json(); if(j && typeof j==='object') global=j; }
+      }catch(_){}
+    }
+    function _maybeFlush(){ if(!_flushing && _hasPending() && Date.now()-_lastFlush>=FLUSH_MS) _flush(false); }
+    async function _flush(useBeacon){
+      if(!HEALTH_API || _flushing || !_hasPending()) return;
+      const batch=JSON.parse(JSON.stringify(pending));
+      const body=JSON.stringify({deltas:batch});
+      _flushing=true; let sent=false;
+      try{
+        if(useBeacon && navigator.sendBeacon){
+          sent=navigator.sendBeacon(HEALTH_API, new Blob([body],{type:'application/json'}));
+        }else{
+          const r=await fetch(HEALTH_API,{method:'POST',headers:{'Content-Type':'application/json'},body,signal:AbortSignal.timeout(4000)});
+          sent=r.ok;
+        }
+      }catch(_){ sent=false; }
+      if(sent){
+        // move flushed counts into the crowd snapshot; subtract from pending
+        // (only the snapshotted amount, so outcomes recorded mid-flush survive).
+        for(const [sig,d] of Object.entries(batch)){
+          const g=global[sig]||(global[sig]={ok:0,bad:0});
+          g.ok=(g.ok||0)+(d.ok||0); g.bad=(g.bad||0)+(d.bad||0);
+          const p=pending[sig]; if(p){ p.ok-=(d.ok||0); p.bad-=(d.bad||0);
+            if(p.ok<=0 && p.bad<=0) delete pending[sig]; }
+        }
+        save(); _lastFlush=Date.now();
+      }
+      _flushing=false;
+    }
+    // contribute on the way out so short sessions still count
+    addEventListener('pagehide', ()=>_flush(true));
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') _flush(true); });
+    pullGlobal();   // warm the crowd data on boot
+
+    return { record, score, rank, pullGlobal, DWELL_OK, KEY,
+             stats:()=>({global:JSON.parse(JSON.stringify(global)), pending:JSON.parse(JSON.stringify(pending))}) };
+  })();
+
+  // Order resolved feeds: learned health first, then HD + English preference.
+  function orderFeeds(streams){
+    const q = s => (s.hd?2:0) + (s.language?.toLowerCase()==='english'?1:0);
+    return streams.map((s,i)=>({s,i,h:FeedHealth.score(s._sig),q:q(s)}))
+                  .sort((a,b)=> b.h-a.h || b.q-a.q || a.i-b.i).map(x=>x.s);
+  }
+
+  /* Current-match feed queue + active-feed outcome tracker. */
+  let _feedQueue=[], _feedIdx=0, _activeFeed=null, _dwellTimer=null, _watchdog=null;
+  function _endActiveFeed(){
+    if(_activeFeed && !_activeFeed.recorded){
+      FeedHealth.record(_activeFeed.sig, (Date.now()-_activeFeed.start) >= FeedHealth.DWELL_OK);
+      _activeFeed.recorded=true;
+    }
+    clearTimeout(_dwellTimer); clearTimeout(_watchdog);
+  }
+  function _beginActiveFeed(stream, match){
+    _activeFeed = { sig: stream._sig, start: Date.now(), recorded:false };
+    clearTimeout(_dwellTimer);
+    _dwellTimer = setTimeout(()=>{ if(_activeFeed && !_activeFeed.recorded){
+      FeedHealth.record(_activeFeed.sig,true); _activeFeed.recorded=true; } }, FeedHealth.DWELL_OK);
+    clearTimeout(_watchdog);
+    _watchdog = setTimeout(()=> showFailoverPrompt(match), 9000);
+  }
+
+  // Advance to the next feed in the health-ranked queue. Leaving the current
+  // feed early records it as a failure (via _endActiveFeed in loadStream).
+  function nextFeed(match){
+    if(_feedQueue.length<2){ toggleSources(); return; }
+    _feedIdx = (_feedIdx+1) % _feedQueue.length;
+    const s=_feedQueue[_feedIdx];
+    document.querySelectorAll('.lang-btn').forEach((b,i)=>b.classList.toggle('active', i===_feedIdx));
+    loadStream(s, match || _currentMatch);
+  }
+
+  // We can't see into the cross-origin iframe, so after ~9s with no way to
+  // confirm playback, nudge the viewer: reveal the switcher and turn the
+  // button into a one-tap "next feed".
+  function showFailoverPrompt(match){
+    const sb=document.getElementById('sources-btn');
+    if(sb && _feedQueue.length>1){ sb.classList.add('nudge'); sb.textContent='⟳ Not loading? Next feed'; }
+    $streamBar.classList.add('show');
+  }
+
+  // The 📺 button: when nudged → one-tap next feed; otherwise → toggle the bar.
+  function onSourcesBtn(){
+    const sb=document.getElementById('sources-btn');
+    if(sb && sb.classList.contains('nudge')){ sb.classList.remove('nudge'); nextFeed(_currentMatch); }
+    else toggleSources();
+  }
+
+  let _streamBarHide;
+  function renderStreamBar(streams, selected, match) {
+    $streamBar.innerHTML='';
+    const seen=new Set();
+    // Include the source in the dedup key — stream #1 from two different
+    // sources are distinct feeds and both should stay as fallbacks.
+    const unique=streams.filter(s=>{
+      const k=`${s._source}-${s.streamNo}-${s.language}`;
+      if(seen.has(k))return false; seen.add(k); return true;
+    });
+    // Bar order == queue order, so button index maps 1:1 to _feedQueue.
+    _feedQueue = unique; _feedIdx = Math.max(0, unique.indexOf(selected));
+    unique.forEach((s,idx)=>{
+      const {flag,label}=getLangMeta(s.language);
+      const btn=document.createElement('button');
+      btn.className='lang-btn'+(s===selected?' active':'');
+      const hp=Math.round(FeedHealth.score(s._sig)*100);
+      btn.innerHTML=`<span class="lang-flag">${flag}</span><span class="lang-name">${label}</span>${s.hd?'<span class="hd-badge">HD</span>':''}`;
+      btn.title=`${s.language} — ${s._source||'source'} #${s.streamNo} · health ${hp}%`;
+      btn.addEventListener('click',()=>{
+        _feedIdx=idx;
+        document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active'); loadStream(s, match);
+      });
+      $streamBar.appendChild(btn);
+    });
+
+    // Expose + briefly reveal the switcher so viewers know alternate feeds
+    // exist (crucial when the default one is dead). The button persists; the
+    // bar auto-hides after a few seconds but re-opens on tap or hover.
+    const sb=document.getElementById('sources-btn');
+    if(sb){ sb.classList.remove('nudge'); sb.textContent=`📺 ${unique.length} feed${unique.length>1?'s':''}`; sb.classList.add('visible'); }
+    $streamBar.classList.add('show');
+    clearTimeout(_streamBarHide);
+    _streamBarHide=setTimeout(()=>$streamBar.classList.remove('show'),4500);
+  }
+
+  function toggleSources(){
+    clearTimeout(_streamBarHide);
+    $streamBar.classList.toggle('show');
+  }
+
+  /* ── SHARE ── */
+  function showToast(msg, isErr=false) {
+    const t=document.getElementById('toast');
+    document.getElementById('toast-msg').textContent=msg;
+    const ic=document.getElementById('toast-icon');
+    ic.textContent=isErr?'⚠':'✓'; ic.style.color=isErr?'#f87171':'var(--accent)';
+    t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800);
+  }
+
+  function shareMatch() {
+    if (!_currentMatch) return;
+    const url=new URL(window.location.href);
+    url.searchParams.set('match',_currentMatch.id);
+    const su=url.toString();
+    if (navigator.clipboard?.writeText)
+      navigator.clipboard.writeText(su).then(()=>showToast('Link copied')).catch(()=>fallbackCopy(su));
+    else fallbackCopy(su);
+  }
+
+  function fallbackCopy(text) {
+    const el=document.createElement('textarea');
+    el.value=text; el.style.cssText='position:fixed;top:-9999px;left:-9999px';
+    document.body.appendChild(el); el.select();
+    try { document.execCommand('copy'); showToast('Link copied'); }
+    catch { showToast('Copy failed',true); }
+    document.body.removeChild(el);
+  }
+
+  async function handleDeepLink() {
+    const id=new URLSearchParams(window.location.search).get('match');
+    if (!id) return;
+    for (const ep of ['/matches/live', '/matches/all-today', '/matches/all']) {
+      try {
+        const res = await apiFetch(ep); if (!res.ok) continue;
+        const data = await res.json();
+        const found = data.find(m => m.id === id);
+        if (found) {
+          setTimeout(()=>{
+            const card=document.querySelector(`.match-card[data-id="${id}"]`);
+            if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.click();}
+            else selectMatch(found,{classList:{add:()=>{},remove:()=>{}},dataset:{id}});
+          },1200);
+          break;
+        }
+      } catch(_){}
+    }
+  }
+
+  /* ── MODE / SPORT TABS ── */
+  $modeTabs.addEventListener('click', e=>{
+    const btn=e.target.closest('.mode-tab'); if(!btn) return;
+    document.querySelectorAll('.mode-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode=btn.dataset.mode; currentSport='all';
+    document.querySelectorAll('.sport-tab').forEach(b=>b.classList.remove('active'));
+    document.querySelector('.sport-tab[data-sport="all"]').classList.add('active');
+
+    // Each tab maps to its own streamed.st endpoint, so switching tabs
+    // fetches that mode. fetchAndRender serves from a short per-mode
+    // cache when it can, so rapid tab-flipping doesn't spam the API.
+    fetchAndRender();
+  });
+
+  async function loadSports() {
+    try {
+      const res = await apiFetch('/sports'); if (!res.ok) return;
+      const data = await res.json();
+      data.filter(s=>!BLOCKED_CATS.has(s.id?.toLowerCase())).forEach(s=>{
+        const btn=document.createElement('button');
+        btn.className='sport-tab'; btn.dataset.sport=s.id; btn.textContent=s.name;
+        $sportTabs.appendChild(btn);
+      });
+    } catch(e){console.warn('Sports load failed',e);}
+  }
+
+  $sportTabs.addEventListener('click', e=>{
+    const btn=e.target.closest('.sport-tab'); if(!btn) return;
+    document.querySelectorAll('.sport-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSport=btn.dataset.sport;
+    renderMatches();
+  });
+
+  /* ── FETCH ── */
+  function endpointForMode(mode) {
+    if (mode==='live')  return '/matches/live';
+    if (mode==='today') return '/matches/all-today';
+    return '/matches/all';
+  }
+
+  /* Short per-mode cache so flipping between Live/Today/Upcoming doesn't
+     refetch a mode that was just loaded. Keyed by mode → { matches, ts }. */
+  const _modeCache = {};
+  let _autoRetryTimer;
+  const FETCH_STALE_MS = 60 * 1000; // reuse a mode's matches for up to 60s
+
+  async function fetchAndRender(force = false) {
+    const mode = currentMode;
+    const cached = _modeCache[mode];
+    if (!force && cached && Date.now() - cached.ts < FETCH_STALE_MS) {
+      allMatches = cached.matches;
+      renderMatches();
+      return;
+    }
+
+    $matchList.innerHTML='<div class="state-msg"><div class="spinner"></div><br>Loading…</div>';
+    activeCard=null;
+    try {
+      const res = await apiFetch(endpointForMode(mode), 2, (attempt, total, reason) => {
+        $matchList.innerHTML = `
+          <div class="state-msg">
+            <div class="spinner"></div><br>
+            Reconnecting… (${attempt}/${total} · ${reason})
+          </div>`;
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error('Unexpected response');
+
+      // The live endpoint is authoritative that its matches are live —
+      // tag them so isLive()/hasEnded() don't second-guess by the clock.
+      if (mode === 'live') data.forEach(m => { m._live = true; });
+
+      _modeCache[mode] = { matches: data, ts: Date.now() };
+      // A slow request can resolve after the user already switched tabs —
+      // only paint if this is still the active mode.
+      if (currentMode !== mode) return;
+      allMatches = data;
+      if (!data.length) {
+        $matchList.innerHTML = '<div class="state-msg">No matches on this tab right now.</div>';
+        return;
+      }
+      renderMatches();
+    } catch(e) {
+      $matchList.innerHTML = `
+        <div class="state-msg error-msg">
+          ⚠ Couldn't reach the match server. (${e.message})<br>
+          <button class="retry-btn" onclick="fetchAndRender(true)">↻ Retry</button>
+        </div>`;
+
+      clearTimeout(_autoRetryTimer);
+      _autoRetryTimer = setTimeout(() => {
+        if ($matchList.querySelector('.error-msg')) fetchAndRender(true);
+      }, 5000);
+    }
+  }
+
+  /* ── RENDER ── */
+  function renderMatches() {
+    let data=allMatches.filter(m=>!BLOCKED_CATS.has(m.category?.toLowerCase()));
+
+    // Mode (Live / Today / Upcoming) is filtered server-side by the
+    // per-mode endpoint in endpointForMode(), so there's no client-side
+    // date/live filter here — only the sport filter below.
+    if (currentSport!=='all') data=data.filter(m=>m.category===currentSport);
+    if (!data.length){$matchList.innerHTML='<div class="state-msg">No matches found.</div>';return;}
+    data=[...data].sort((a,b)=>(b.popular-a.popular)||(a.date-b.date));
+    $matchList.innerHTML='';
+    if (currentMode==='all') {
+      const dg={};
+      data.forEach(m=>{
+        const dk=fmtDate(m.date);
+        if(!dg[dk])dg[dk]={};
+        if(!dg[dk][m.category])dg[dk][m.category]=[];
+        dg[dk][m.category].push(m);
+      });
+      Object.entries(dg).forEach(([dl,cg])=>{
+        const d=document.createElement('div');
+        d.className='date-group-header'; d.textContent=dl;
+        $matchList.appendChild(d);
+        Object.entries(cg).forEach(([c,ms])=>appendCategoryGroup(c,ms));
+      });
+    } else {
+      const cg={};
+      data.forEach(m=>{if(!cg[m.category])cg[m.category]=[];cg[m.category].push(m);});
+      Object.entries(cg).forEach(([c,ms])=>appendCategoryGroup(c,ms));
+    }
+  }
+
+  function appendCategoryGroup(cat, matches) {
+    const h=document.createElement('div');
+    h.className='category-group-header';
+    h.innerHTML=`<span>${cat.toUpperCase()}</span>`;
+    $matchList.appendChild(h);
+    matches.forEach(m=>$matchList.appendChild(buildCard(m)));
+  }
+
+  function buildCard(match) {
+    const card = document.createElement('div');
+    card.className = 'match-card' + (match.popular ? ' popular' : '');
+    card.dataset.id = match.id;
+
+    const home     = match.teams?.home;
+    const away     = match.teams?.away;
+    const hasTeams = home?.name && away?.name;
+    const live     = isLive(match);
+    const ended    = !live && hasEnded(match);
+
+    // LIVE badge now shows on every tab (was previously suppressed on the
+    // Live tab itself, which is why it looked missing there vs Today).
+    const statusTag = live
+      ? '<span class="live-badge">LIVE</span>'
+      : ended
+        ? '<span class="over-badge">OVER</span>'
+        : '';
+
+    if (hasTeams) {
+      // Build structure then set names via textContent to prevent XSS
+      card.innerHTML = `
+        ${badgeImg(home.badge, home.name, match.category)}
+        <span class="home-name"></span>
+        <span class="vs-divider">vs</span>
+        <span class="away-name"></span>
+        ${badgeImg(away.badge, away.name, match.category)}
+        ${statusTag}
+        <span class="card-time">${fmtTime(match.date)}</span>
+      `;
+      card.querySelector('.home-name').textContent = home.name;
+      card.querySelector('.away-name').textContent = away.name;
+    } else {
+      card.innerHTML = `<span class="card-time">${fmtTime(match.date)}</span>`;
+      const titleEl = document.createElement('span');
+      titleEl.className   = 'card-title';
+      titleEl.textContent = match.title || '';
+      if (statusTag) titleEl.insertAdjacentHTML('beforeend', ' ' + statusTag);
+      card.insertBefore(titleEl, card.firstChild);
+    }
+
+    card.addEventListener('click', () => selectMatch(match, card));
+    // Pre-resolve this match's feeds before the click so playback starts
+    // instantly on a vetted feed: on hover (desktop) and on scroll-into-view.
+    card.addEventListener('mouseenter', () => prewarmMatch(match), { passive: true });
+    card._match = match;
+    if (_prewarmObserver) _prewarmObserver.observe(card);
+    return card;
+  }
+
+  /* ── STREAM SELECTION ── */
+  // Visible failure: the stream bar is easy to miss, so also write the
+  // reason into the always-visible title bar and keep the idle screen up
+  // instead of dropping into a black player.
+  function showStreamError(title, msg) {
+    $streamBar.innerHTML  = `<span class="stream-bar-msg error">⚠ ${msg}</span>`;
+    $titleBar.textContent = `${title} — ${msg}`;
+    $playerFrame.style.display = 'none';
+    $idleScreen.style.display  = '';
+    const sb=document.getElementById('sources-btn');
+    if(sb) sb.classList.remove('visible');
+    $streamBar.classList.remove('show');
+  }
+
+  // Resolve a match's feeds: rank sources by learned health, resolve all in
+  // parallel, record each outcome, and return the health-ordered feed list
+  // (may be empty). Shared by the click path and the background pre-warmer, so
+  // a source that won't resolve (like `echo`) sinks and stops being picked.
+  async function resolveMatchFeeds(match) {
+    if (!match.sources?.length) return [];
+    const rankedSources = FeedHealth.rank(match.sources, s => feedSig(match._provider, s.source));
+    const perSource = await Promise.all(rankedSources.map(async src => {
+      const sig = feedSig(match._provider, src.source);
+      try {
+        const res = await apiFetch(`/stream/${src.source}/${src.id}`);
+        if (!res.ok) { FeedHealth.record(sig, false); return []; }
+        const d = await res.json();
+        if (Array.isArray(d) && d.length) return d.map(s => ({ ...s, _source: src.source, _sig: sig }));
+        FeedHealth.record(sig, false);        // resolved empty → source is weak
+        return [];
+      } catch(_) { FeedHealth.record(sig, false); return []; }
+    }));
+    return orderFeeds(perSource.flat());
+  }
+
+  /* ── PROACTIVE PRE-RESOLVE ──────────────────────────────────────────
+     Resolve a match's feeds BEFORE the user clicks — as its card scrolls
+     into view or on hover — so the click loads an already-vetted best feed
+     with no round-trip and dead sources pre-filtered. Also front-loads the
+     health learning. Cached briefly, deduped, and naturally throttled to the
+     handful of cards actually on screen. */
+  const _resolveCache = new Map();            // matchId -> { streams, ts }
+  const RESOLVE_TTL = 60000;
+  const _prewarmInFlight = new Set();
+  const _freshCache = id => { const c=_resolveCache.get(id); return (c && Date.now()-c.ts < RESOLVE_TTL) ? c : null; };
+  async function prewarmMatch(match){
+    if (!match?.sources?.length || _freshCache(match.id) || _prewarmInFlight.has(match.id)) return;
+    _prewarmInFlight.add(match.id);
+    try { _resolveCache.set(match.id, { streams: await resolveMatchFeeds(match), ts: Date.now() }); }
+    catch(_){}
+    finally { _prewarmInFlight.delete(match.id); }
+  }
+  // Warm cards as they enter the viewport (once each; TTL handles refresh).
+  const _prewarmObserver = ('IntersectionObserver' in window)
+    ? new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) {
+        if (e.target._match) prewarmMatch(e.target._match);
+        _prewarmObserver.unobserve(e.target);
+      } }, { rootMargin: '250px' })
+    : null;
+
+  async function selectMatch(match, card) {
+    if (activeCard) activeCard.classList.remove('active');
+    card.classList.add('active');
+    activeCard    = card;
+    _currentMatch = match;
+
+    $titleBar.textContent = getDisplayTitle(match); // textContent — XSS safe
+    $streamBar.innerHTML  = '<span class="stream-bar-msg">LOADING STREAMS…</span>';
+    track('stream_click', { title: getDisplayTitle(match), cat: match.category });
+
+    if (!match.sources?.length) {
+      showStreamError(getDisplayTitle(match), 'No stream listed for this match yet');
+      return;
+    }
+
+    // Instant path: reuse the pre-warmed result if we have a fresh one;
+    // otherwise resolve now. Either way the feeds come back health-ordered.
+    const cached = _freshCache(match.id);
+    const streams = cached ? cached.streams : await resolveMatchFeeds(match);
+    if (!cached) _resolveCache.set(match.id, { streams, ts: Date.now() });
+
+    if (!streams.length) {
+      showStreamError(getDisplayTitle(match), 'No working stream right now — try another match');
+      return;
+    }
+
+    const best = streams[0];                  // already best-health, HD/English
+    renderStreamBar(streams, best, match);
+    loadStream(best, match);
+  }
+
+  /* ── LIVE TICKER ── */
+  const SPORT_EMOJI={basketball:'🏀',baseball:'⚾',hockey:'🏒','american-football':'🏈',tennis:'🎾',golf:'⛳','motor-sports':'🏎️',boxing:'🥊',mma:'🥋'};
+
+  function tickerBadge(name,src,cat) {
+    const logo=getTeamLogo(name,cat)||badgeUrl(src);
+    const safe=(name||'?').replace(/"/g,'');
+    if(logo) return `<img class="t-badge" src="${logo}" alt="${safe}" loading="lazy" onerror="this.outerHTML='<div class=\\'t-badge-placeholder\\'>${(name||'?')[0]}</div>'">`;
+    return `<div class="t-badge-placeholder">${(name||'?')[0]}</div>`;
+  }
+
+  const ESPN_SCORE_MAP={'basketball':'basketball/nba','baseball':'baseball/mlb','hockey':'hockey/nhl','american-football':'football/nfl'};
+  const _scoreCache={};
+
+  async function fetchScoreboardEvents(path) {
+    const now=Date.now(), c=_scoreCache[path];
+    if(c&&now-c.ts<45000) return c.events;
+    try {
+      const res=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard`);
+      if(!res.ok) return [];
+      const d=await res.json();
+      const events=d.events||[];
+      _scoreCache[path]={ts:now,events};
+      return events;
+    } catch{return [];}
+  }
+
+  function normName(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').trim();}
+  function namesMatch(a,b){
+    if(!a||!b) return false;
+    const na=normName(a),nb=normName(b);
+    if(na===nb) return true;
+    const wa=na.split(' ').filter(w=>w.length>3);
+    const wb=nb.split(' ').filter(w=>w.length>3);
+    return wa.some(w=>nb.includes(w))||wb.some(w=>na.includes(w));
+  }
+
+  async function getLiveScore(match) {
+    const cat=(match.category||'').toLowerCase();
+    const path=ESPN_SCORE_MAP[cat]; if(!path) return null;
+    const hn=match.teams?.home?.name, an=match.teams?.away?.name;
+    if(!hn||!an) return null;
+    const events=await fetchScoreboardEvents(path);
+    for (const ev of events) {
+      const comps=ev.competitions?.[0]; if(!comps) continue;
+      const cx=comps.competitors||[];
+      const h=cx.find(c=>c.homeAway==='home'), a=cx.find(c=>c.homeAway==='away');
+      if(!h||!a) continue;
+      if((namesMatch(h.team.displayName,hn)||namesMatch(h.team.displayName,an))&&
+         (namesMatch(a.team.displayName,an)||namesMatch(a.team.displayName,hn))) {
+        const st=ev.status;
+        if(st?.type?.state==='pre') return null;
+        return {homeScore:h.score??'0',awayScore:a.score??'0',
+                desc:st?.type?.shortDetail||'',state:st?.type?.state};
+      }
+    }
+    return null;
+  }
+
+  function buildTickerChip(match, score) {
+    const home=match.teams?.home, away=match.teams?.away;
+    const cat=(match.category||'').toLowerCase();
+    const emoji=SPORT_EMOJI[cat]||'🏅';
+    const nowLive = Date.now() >= match.date && Date.now() <= match.date + LIVE_WINDOW_MS;
+    const hBadge=home?tickerBadge(home.name,home.badge,cat):`<span style="font-size:13px">${emoji}</span>`;
+    const aBadge=away?tickerBadge(away.name,away.badge,cat):'';
+    const homeN=home?.name||match.title, awayN=away?.name||'';
+    let scoreBlock=score&&(score.state==='in'||score.state==='post')
+      ?`<span class="t-score">${score.homeScore}</span><span class="t-score-sep">–</span><span class="t-score">${score.awayScore}</span><span class="t-status">${score.desc}</span>`
+      :`<span class="t-time">${fmtTime(match.date)}</span>`;
+    return `<div class="t-chip">${hBadge}${aBadge}<span class="t-matchup">${homeN}${awayN?` <span class="t-sep">vs</span> ${awayN}`:''}</span><span class="t-cat">${cat}</span>${nowLive?'<div class="t-live-pip"></div>':''}${scoreBlock}</div>`;
+  }
+
+  async function loadTicker() {
+    try {
+      const res = await apiFetch('/matches/live'); if (!res.ok) return;
+      const all=await res.json(); if(!Array.isArray(all)||!all.length) return;
+      const data=all.filter(m=>!BLOCKED_CATS.has((m.category||'').toLowerCase()))
+                    .sort((a,b)=>(b.popular-a.popular)||(a.date-b.date));
+      if(!data.length) return;
+      const scores=await Promise.all(data.map(m=>getLiveScore(m)));
+      const html=data.map((m,i)=>buildTickerChip(m,scores[i])).join('');
+      const inner=document.getElementById('ticker-inner');
+      inner.innerHTML=html+html;
+      const hw=inner.scrollWidth/2;
+      inner.style.animationDuration=`${Math.max(20,hw/80)}s`;
+    } catch(_){}
+  }
+
+  /* ── ANALYTICS ── */
+  const ACTIVITY_KEY='streamd_activity';
+  function getActivity(){try{return JSON.parse(localStorage.getItem(ACTIVITY_KEY)||'{}');}catch{return {};}}
+  function track(event,data={}) {
+    if(window.plausible) window.plausible(event,{props:data});
+    const a=getActivity();
+    if(!a.firstVisit) a.firstVisit=Date.now();
+    a.lastVisit=Date.now();
+    a.pageViews=(a.pageViews||0)+(event==='pageview'?1:0);
+    a.streams=(a.streams||0)+(event==='stream_click'?1:0);
+    if(!a.events) a.events=[];
+    a.events.push({e:event,t:Date.now(),...data});
+    if(a.events.length>200) a.events=a.events.slice(-200);
+    if(data.cat){if(!a.cats)a.cats=[];a.cats.push(data.cat);if(a.cats.length>100)a.cats=a.cats.slice(-100);}
+    localStorage.setItem(ACTIVITY_KEY,JSON.stringify(a));
+  }
+
+  // Keep both sliders (header + corner widget) in sync
+  function syncVolSliders(val) {
+    const v = Number(val);
+    const header = document.getElementById('vol-slider');
+    const widget = document.getElementById('vol-widget-slider');
+    if (header && header.value !== String(v)) { header.value = v; _fillSlider(v); }
+    if (widget && widget.value !== String(v)) {
+      widget.value = v;
+      widget.style.background =
+        `linear-gradient(to right,var(--accent) ${v}%,var(--border) ${v}%)`;
+    }
+    const btn = document.getElementById('vol-widget-btn');
+    if (btn) btn.textContent = v === 0 ? '🔇' : (v < 50 ? '🔉' : '🔊');
+  }
+
+  /* ── LIVE CLOCK ── */
+  (function initClock() {
+    const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+    const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+    function tick() {
+      const now  = new Date();
+      const hrs  = String(now.getHours()).padStart(2,'0');
+      const mins = String(now.getMinutes()).padStart(2,'0');
+      const secs = String(now.getSeconds()).padStart(2,'0');
+
+      document.getElementById('clock-time').textContent = `${hrs}:${mins}:${secs}`;
+      document.getElementById('clock-date').textContent =
+        `${DAYS[now.getDay()]} ${MONTHS[now.getMonth()]} ${now.getDate()}`;
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  })();
+
+  /* ── BOOT ── */
+  (async()=>{
+    track('pageview');
+    // loadSports() and fetchAndRender() hit two independent hosts with
+    // no shared dependency — running them in parallel instead of in
+    // series shaves off whichever one is slower, not both combined.
+    await Promise.all([ loadSports(), fetchAndRender() ]);
+    handleDeepLink();
+    loadTicker();
+    setInterval(loadTicker,3*60*1000);
+  })();
+</script>
+</body>
+</html>
