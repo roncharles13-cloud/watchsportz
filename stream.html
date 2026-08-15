@@ -773,29 +773,23 @@
       <div class="idle-icon">📡</div>
       <div class="idle-text">No stream selected</div>
     </div>
-    <!-- SANDBOX TRADEOFF (2026-08-15) ─────────────────────────────────────
-         embed.st now detects a restrictive sandbox and REFUSES to play
-         ("Remove sandbox attributes on the iframe tag") because its popup ads
-         can't fire — and it mints the video token through that same ad flow
-         (a WASM + POST /fetch handshake, session/fingerprint-bound), so a
-         tight sandbox literally means no video. We add allow-popups +
-         user-activation-gated top-navigation so the stream plays.
+    <!-- NO SANDBOX (2026-08-15) ───────────────────────────────────────────
+         embed.st refuses to play in ANY sandboxed iframe — it detects the
+         sandbox attribute and shows "Remove sandbox attributes on the iframe
+         tag" instead of the player, and mints the video token through the same
+         ad flow, so NO combination of sandbox tokens satisfies it (loosening
+         to allow-popups + allow-top-navigation was verified NOT enough on the
+         live site). The sandbox is therefore removed entirely so the stream
+         plays.
 
-         WHAT THIS LETS BACK IN:
-           • popup/popunder windows — the embed's window.open now works
-           • click-through redirects, but ONLY on a genuine user gesture
-         WHAT STILL BLOCKS/DAMPENS IT:
-           • NO allow-popups-to-escape-sandbox → popups inherit this sandbox
-             and can't freely chain more popups
-           • NO allow-modals, NO unconditional top-navigation
-           • the JS dampeners below (window.open override, blur-kill, _blank
-             interception) still run and neutralise part of it
-         Full ad removal would need a stripping/rewriting media proxy, which
-         is not achievable from static hosting and is blocked by the embed's
-         session-bound token — see the source-resilience notes. -->
+         TRADEOFF: the embed's scripts can now open popups/popunders and (on a
+         user gesture) navigate. The JS dampeners below (window.open override,
+         blur-kill, _blank interception) still run and catch part of it; full
+         ad blocking is a client-side job (uBlock Origin / a blocking DNS).
+         Removing ads server-side would need a rewriting media proxy, which is
+         blocked by the embed's session-bound token — see the notes. -->
     <iframe id="player-frame" allowfullscreen allow="autoplay; fullscreen"
-            referrerpolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups allow-top-navigation-by-user-activation"></iframe>
+            referrerpolicy="no-referrer"></iframe>
     <div id="pause-overlay">
       <div id="pause-overlay-icon">▶</div>
       <div id="pause-overlay-label">Paused — click to resume</div>
